@@ -1,0 +1,9 @@
+{
+  "name": "aioscreator",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --dir apps/web dev",
+    "build": "pnpm --dir apps/web build",
+    "lint": "pnpm --dir apps/web lint"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "note": "FLUX.2 Klein 4B distilled + ReferenceLatent. LoadImage filename is staged into ComfyUI/input by CreatorOS.",
+  "4": { "class_type": "LoadImage", "inputs": { "image": "creatoros-ref.png" } },
+  "5": { "class_type": "FluxKontextImageScale", "inputs": { "image": ["4", 0] } },
+  "6": { "class_type": "VAEEncode", "inputs": { "pixels": ["5", 0], "vae": ["3", 0] } },
+  "9": { "class_type": "ReferenceLatent", "inputs": { "conditioning": ["7", 0], "latent": ["6", 0] } }
+}

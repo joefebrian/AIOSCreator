@@ -1,0 +1,1886 @@
+{
+  "id": "5b819fda-d4c2-4191-a851-d8d5445d4c06",
+  "revision": 0,
+  "last_node_id": 62,
+  "last_link_id": 138,
+  "nodes": [
+    {
+      "id": 7,
+      "type": "SaveVideo",
+      "pos": [
+        2740,
+        2300
+      ],
+      "size": [
+        280,
+        378
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "video",
+          "type": "VIDEO",
+          "link": 52
+        }
+      ],
+      "outputs": [
+        {
+          "name": "video",
+          "type": "VIDEO",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.34.1"
+      },
+      "widgets_values": [
+        "video/ComfyUI",
+        "auto",
+        "auto",
+        "auto"
+      ],
+      "widgets_values_named": {
+        "filename_prefix": "video/ComfyUI",
+        "format": "auto",
+        "format.codec": "auto",
+        "codec": "auto"
+      }
+    },
+    {
+      "id": 47,
+      "type": "INTConstant",
+      "pos": [
+        2220,
+        2740
+      ],
+      "size": [
+        220,
+        60
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "value",
+          "type": "INT",
+          "links": []
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-kjnodes",
+        "ver": "1.5.0"
+      },
+      "widgets_values": [
+        8
+      ],
+      "widgets_values_named": {
+        "value": 8
+      },
+      "color": "#1b4669",
+      "bgcolor": "#29699c"
+    },
+    {
+      "id": 49,
+      "type": "INTConstant",
+      "pos": [
+        2200,
+        2620
+      ],
+      "size": [
+        220,
+        60
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "value",
+          "type": "INT",
+          "links": []
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-kjnodes",
+        "ver": "1.5.0"
+      },
+      "widgets_values": [
+        20
+      ],
+      "widgets_values_named": {
+        "value": 20
+      },
+      "color": "#1b4669",
+      "bgcolor": "#29699c"
+    },
+    {
+      "id": 19,
+      "type": "fee7a5d7-f8fc-43f9-a0be-176fc848b76e",
+      "pos": [
+        2520,
+        2300
+      ],
+      "size": [
+        220,
+        80
+      ],
+      "flags": {
+        "collapsed": true,
+        "pinned": true
+      },
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 49
+        },
+        {
+          "name": "audio",
+          "shape": 7,
+          "type": "AUDIO",
+          "link": 50
+        },
+        {
+          "name": "fps",
+          "type": "FLOAT",
+          "widget": {
+            "name": "fps"
+          },
+          "link": 51
+        }
+      ],
+      "outputs": [
+        {
+          "name": "VIDEO",
+          "type": "VIDEO",
+          "links": [
+            52
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.34.1",
+        "previewExposures": []
+      },
+      "widgets_values": [
+        24
+      ],
+      "widgets_values_named": {
+        "fps": 24
+      }
+    },
+    {
+      "id": 17,
+      "type": "MiniMaxH3MotionDirector",
+      "pos": [
+        1900,
+        2300
+      ],
+      "size": [
+        620,
+        782
+      ],
+      "flags": {
+        "pinned": true
+      },
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 128
+        },
+        {
+          "name": "video_vae",
+          "type": "VAE",
+          "link": 124
+        },
+        {
+          "name": "audio_vae",
+          "type": "VAE",
+          "link": 125
+        },
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 127
+        },
+        {
+          "name": "sampler",
+          "shape": 7,
+          "type": "SAMPLER",
+          "link": 123
+        },
+        {
+          "name": "sigmas",
+          "shape": 7,
+          "type": "SIGMAS",
+          "link": 126
+        },
+        {
+          "name": "director_inputs",
+          "shape": 7,
+          "type": "MMX_MOTION_DIR_INPUTS",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "shape": 6,
+          "type": "IMAGE",
+          "links": [
+            49
+          ]
+        },
+        {
+          "name": "audio",
+          "shape": 6,
+          "type": "AUDIO",
+          "links": [
+            50
+          ]
+        },
+        {
+          "name": "fps",
+          "type": "FLOAT",
+          "links": [
+            51
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "minimax-h3-motion-director",
+        "ver": "f99390645533c0993a8914f2585d7199ebc3e8e2",
+        "mmx_director_widget_state": {
+          "task_type": "t2v — 文生视频(Text to Video)",
+          "global_prompt": "",
+          "bd_grp_sample": "Sampling Settings  [External]",
+          "cfg": 1,
+          "seed": 601036732930444,
+          "control_after_generate": "randomize",
+          "frame_rate": 24,
+          "width": 640,
+          "height": 640,
+          "ref_max_size": 640,
+          "total_frames": 1458,
+          "timeline_data": "{\"version\":5,\"editMode\":\"segment\",\"totalFrames\":1458,\"frameRate\":24,\"video\":{\"fileName\":\"\",\"videoFile\":\"\",\"subfolder\":\"\",\"type\":\"input\",\"frames\":[],\"frameMap\":[],\"sourceFrameCount\":1852,\"deletedSourceRanges\":[]},\"videoClips\":[],\"global\":{\"taskType\":\"t2v — 文生视频(Text to Video)\",\"prompt\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"referenceVideo\":{\"videoFile\":\"\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},\"continuousReference\":false,\"genImage\":{\"imageFile\":\"\"}},\"output\":{\"mode\":\"fixed\",\"aspectRatio\":\"1:1 (方形)\",\"megapixels\":0.4,\"multiple\":32,\"longEdge\":640,\"width\":640,\"height\":640,\"maxExportFrames\":0,\"exportMode\":\"all\",\"audioMode\":\"generate\",\"continuityEnabled\":false,\"continuityOverlapFrames\":9},\"runSelectEnabled\":false,\"runSelection\":[],\"liveTaePreview\":true,\"segments\":[{\"id\":\"mtrrj0nq0ddfd\",\"start\":0,\"length\":243,\"frameCount\":243,\"durationSec\":10,\"prompt\":\"The scene takes place in an outdoor environment. An Arctic hunter  in a brown jacket and black pants with a brown winter hat, kneeling on the ground, checking the contents of his backpack. Snow blows in lightly over the icy ground and the audible howl of the wind can be heard across the icy tundra. The camera is fixed at a wide angle shot with large ice glaciers in the distance, and floating chunks of ice moving along the icy river. \",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"contextLink\":{\"schema\":\"previous_context_link_v1\",\"enabled\":false,\"visual\":false,\"audio\":false}},{\"id\":\"mtrrnpzkndij6\",\"start\":243,\"length\":243,\"frameCount\":243,\"durationSec\":10,\"prompt\":\"The Arctic hunter is kneeling on the ground, checking the contents of his backpack while a wide angle camera shot captures the action. The camera begins to move in closer with handheld camera movements, the crunch of the snow can be heard under each footstep while the camera continues to get closer to the Arctic hunter, until it's at a mid-body close-up. \",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"contextLink\":{\"schema\":\"previous_context_link_v1\",\"enabled\":true,\"visual\":true,\"audio\":true}},{\"id\":\"mtrrqki8aao4f\",\"start\":486,\"length\":243,\"frameCount\":243,\"durationSec\":10,\"prompt\":\"There is a side-profile close-up of the Arctic hunter's face, he has frost in his beard, and lines in his face from the harsh cold weather. He squints, and turns to the camera, his cold breath visible with each breath he takes. He nods slightly and smiles, saying in an Irish accent, 'One minute, single pass generations are now possible. The power of generative A I is now in the hands of low-end GPU users...', he pauses and chuckles.\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"contextLink\":{\"schema\":\"previous_context_link_v1\",\"enabled\":true,\"visual\":true,\"audio\":true}},{\"id\":\"mtrs0i17d3stt\",\"start\":729,\"length\":243,\"frameCount\":243,\"durationSec\":10,\"prompt\":\"With a close-up on the Arctic hunter's face, with frost in his beard, and lines in his face from the harsh cold weather, there is howling winds being heard as he continues to speak in a low voice, saying in an Irish accent, 'It's Comfy.... for you and I....' his voice trails off as he turns and looks off into the distance.\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"contextLink\":{\"schema\":\"previous_context_link_v1\",\"enabled\":true,\"visual\":true,\"audio\":true}},{\"id\":\"mtrs2geqvm53i\",\"start\":972,\"length\":243,\"frameCount\":243,\"durationSec\":10,\"prompt\":\"A polar bear can be seen walking in the distance. The polar bear grunts as it takes each deliberate step, the snow beneath its feet making audible sounds as he moves. The polar bear stops and then looks in the direction of the Arctic hunter. There is a close-up of the polar bear's eye where the reflection of the Arctic hunter can be seen in the polar's eye.\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"contextLink\":{\"schema\":\"previous_context_link_v1\",\"enabled\":true,\"visual\":true,\"audio\":true}},{\"id\":\"mtrtfrk4cs3z4\",\"start\":1215,\"length\":243,\"frameCount\":243,\"durationSec\":10,\"prompt\":\"There is a wide-angle shot of the Arctic hunter in the brown jacket and black pants, with the brown winter hat packing his equipment while kneeling down in the icy cold, and the polar bear comes up and looks at him in the face and then lays down on the ground. The large text of 'MiniMax H3' fades into view in the center of the screen and a British narrator calmly says, 'MiniMax H3' as the snowy wind blows over the tundra and the polar bear lets out a low growl. \",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"contextLink\":{\"schema\":\"previous_context_link_v1\",\"enabled\":true,\"visual\":true,\"audio\":true}}],\"width\":640,\"height\":640,\"refMaxSize\":640,\"timelineMode\":\"prompt_batch\",\"seedMode\":\"randomize\",\"gen\":{\"defaultFrameCount\":124},\"r2vCommon\":{\"refs\":[{\"index\":0,\"assetId\":\"r2v-common-picture-85c616ec-22a6-45a0-9f3c-5e926a24117e\",\"imageFile\":\"Akool V2_Make a full body front a.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":1,\"assetId\":\"r2v-common-picture-ca9005b7-c592-4347-878a-78cf298a8584\",\"imageFile\":\"GPT Image 2_Make a full body front a (1).png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":2,\"assetId\":\"r2v-common-picture-7f936272-ab15-4a84-87e5-867b51328f54\",\"imageFile\":\"Donnie Yen GPT Image 2_Make a full body front a.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":3,\"assetId\":\"r2v-common-picture-1c9c4b46-b6f1-4da1-beb6-0f207bccd702\",\"imageFile\":\"Donnie Yen - GPT Image 2_Make a full body front a.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":4,\"assetId\":\"r2v-common-picture-ee2611e6-02cd-487a-896f-68f9fd7575c2\",\"imageFile\":\"l-intro-1617213923.jpg\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":5,\"assetId\":\"r2v-common-picture-db749372-75b1-4013-918a-e53e01229d89\",\"imageFile\":\"Akool V2_Upscale the image {{6a9d.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"}],\"refAudios\":[],\"refVideos\":[]},\"audioRoles\":{\"version\":2,\"global\":{},\"segments\":{\"mtpxjrbl8nn2u\":{},\"mtqff62jnteai\":{},\"mtqffjtyz5re7\":{},\"mtqfu57ykd2ka\":{},\"mtqfxkw2ozo33\":{},\"mtqg42sbnqi0m\":{},\"mtqg5j1s0x65j\":{},\"mtqgfogmrjeyn\":{},\"mtqgnamfkuzqp\":{},\"mtqgvewjoyubf\":{},\"mtqh2z3q8ijwx\":{}}}}",
+          "bd_grp_motion": "Cross-Segment Continuity",
+          "motion_context_enabled": true,
+          "context_length": 22,
+          "source_overlap_frames": 5,
+          "audio_context_enabled": true,
+          "color_reanchor_enabled": false,
+          "bd_grp_advanced": "Advanced sampling · Sampling: external",
+          "steps": 25,
+          "sampler_name": "res_multistep",
+          "scheduler": "simple",
+          "shift_video": 12,
+          "shift_audio": 3,
+          "bd_grp_perf": "Performance",
+          "clear_vram_between_segments": true,
+          "export_source_images": false,
+          "bd_grp_experimental": "Experimental",
+          "pin_renorm_enabled": false,
+          "postprocess_config": "{\"version\":9,\"global_refine\":{\"enabled\":true,\"mode\":\"refine\",\"second_sampling_enabled\":true,\"result_previews_enabled\":false,\"denoise\":\"0.25\",\"steps\":0,\"seed_mode\":\"inherit\",\"seed_offset\":1,\"skip_fl2v\":false,\"upscale_method\":\"lanczos\",\"upscale_model\":\"\",\"latent_upscale_model\":\"ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors\",\"latent_upscale_precision\":\"fp16\",\"latent_upscale_device\":\"cuda\",\"vsr_quality\":\"high\",\"resolution_mode\":\"follow_director\",\"aspect\":\"16:9\",\"megapixels\":1,\"width\":1376,\"height\":768,\"rtx_deblur_enabled\":false,\"rtx_deblur_quality\":\"medium\",\"rtx_deblur_strength\":1,\"passes\":1},\"face_refine\":{\"enabled\":false,\"detector\":\"ultralytics\",\"detector_model\":\"bbox\\\\face_yolov8m.pt\",\"confidence\":0.35,\"select\":\"largest\",\"crop_factor\":2.5,\"canvas_mode\":\"auto_capped_768\",\"canvas_size\":768,\"smooth_method\":\"gaussian\",\"smooth_window\":21,\"size_smooth_window\":51,\"size_mode\":\"adaptive\",\"adaptive\":true,\"base_denoise\":0.45,\"strength_small_face\":0.8,\"strength_large_face\":0.35,\"face_px_small\":30,\"face_px_large\":120,\"mask_mode\":\"rect\",\"paste_region\":\"face_rect\",\"feather\":24,\"colour_match\":true,\"blend\":1,\"undetected_frames\":\"fade\",\"identity_reference\":\"\",\"identity_track\":false,\"identity_threshold\":0.28,\"fallback_detector\":\"none\",\"fallback_head_frac\":0.5,\"gamma\":1,\"denoise_smooth\":9,\"mask_dilation\":24,\"feather_scales_with_crop\":false,\"sam_model\":\"\",\"sam_threshold\":0.93,\"sam_dilation\":0,\"sam_temporal_smooth\":5},\"preview\":{\"enabled\":true,\"preview_frames\":8,\"preview_fps\":12,\"max_resolution\":1024,\"jpeg_quality\":80,\"preview_every\":1},\"save\":{\"auto_save\":false,\"filename_prefix\":\"video/MiniMaxH3_Director\",\"format\":\"auto\",\"codec\":\"auto\",\"encoding\":\"auto\",\"crf\":23}}",
+          "minimax_motion_director_ui": ""
+        }
+      },
+      "widgets_values": [
+        "t2v — 文生视频(Text to Video)",
+        "",
+        "Sampling Settings  [External]",
+        1,
+        601036732930444,
+        "randomize",
+        24,
+        640,
+        640,
+        640,
+        1458,
+        "{\"version\":5,\"editMode\":\"segment\",\"totalFrames\":1458,\"frameRate\":24,\"video\":{\"fileName\":\"\",\"videoFile\":\"\",\"subfolder\":\"\",\"type\":\"input\",\"frames\":[],\"frameMap\":[],\"sourceFrameCount\":1852,\"deletedSourceRanges\":[]},\"videoClips\":[],\"global\":{\"taskType\":\"t2v — 文生视频(Text to Video)\",\"prompt\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"referenceVideo\":{\"videoFile\":\"\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},\"continuousReference\":false,\"genImage\":{\"imageFile\":\"\"}},\"output\":{\"mode\":\"fixed\",\"aspectRatio\":\"1:1 (方形)\",\"megapixels\":0.4,\"multiple\":32,\"longEdge\":640,\"width\":640,\"height\":640,\"maxExportFrames\":0,\"exportMode\":\"all\",\"audioMode\":\"generate\",\"continuityEnabled\":false,\"continuityOverlapFrames\":9},\"runSelectEnabled\":false,\"runSelection\":[],\"liveTaePreview\":true,\"segments\":[{\"id\":\"mtrrj0nq0ddfd\",\"start\":0,\"length\":243,\"frameCount\":243,\"durationSec\":10,\"prompt\":\"The scene takes place in an outdoor environment. An Arctic hunter  in a brown jacket and black pants with a brown winter hat, kneeling on the ground, checking the contents of his backpack. Snow blows in lightly over the icy ground and the audible howl of the wind can be heard across the icy tundra. The camera is fixed at a wide angle shot with large ice glaciers in the distance, and floating chunks of ice moving along the icy river. \",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"contextLink\":{\"schema\":\"previous_context_link_v1\",\"enabled\":false,\"visual\":false,\"audio\":false}},{\"id\":\"mtrrnpzkndij6\",\"start\":243,\"length\":243,\"frameCount\":243,\"durationSec\":10,\"prompt\":\"The Arctic hunter is kneeling on the ground, checking the contents of his backpack while a wide angle camera shot captures the action. The camera begins to move in closer with handheld camera movements, the crunch of the snow can be heard under each footstep while the camera continues to get closer to the Arctic hunter, until it's at a mid-body close-up. \",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"contextLink\":{\"schema\":\"previous_context_link_v1\",\"enabled\":true,\"visual\":true,\"audio\":true}},{\"id\":\"mtrrqki8aao4f\",\"start\":486,\"length\":243,\"frameCount\":243,\"durationSec\":10,\"prompt\":\"There is a side-profile close-up of the Arctic hunter's face, he has frost in his beard, and lines in his face from the harsh cold weather. He squints, and turns to the camera, his cold breath visible with each breath he takes. He nods slightly and smiles, saying in an Irish accent, 'One minute, single pass generations are now possible. The power of generative A I is now in the hands of low-end GPU users...', he pauses and chuckles.\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"contextLink\":{\"schema\":\"previous_context_link_v1\",\"enabled\":true,\"visual\":true,\"audio\":true}},{\"id\":\"mtrs0i17d3stt\",\"start\":729,\"length\":243,\"frameCount\":243,\"durationSec\":10,\"prompt\":\"With a close-up on the Arctic hunter's face, with frost in his beard, and lines in his face from the harsh cold weather, there is howling winds being heard as he continues to speak in a low voice, saying in an Irish accent, 'It's Comfy.... for you and I....' his voice trails off as he turns and looks off into the distance.\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"contextLink\":{\"schema\":\"previous_context_link_v1\",\"enabled\":true,\"visual\":true,\"audio\":true}},{\"id\":\"mtrs2geqvm53i\",\"start\":972,\"length\":243,\"frameCount\":243,\"durationSec\":10,\"prompt\":\"A polar bear can be seen walking in the distance. The polar bear grunts as it takes each deliberate step, the snow beneath its feet making audible sounds as he moves. The polar bear stops and then looks in the direction of the Arctic hunter. There is a close-up of the polar bear's eye where the reflection of the Arctic hunter can be seen in the polar's eye.\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"contextLink\":{\"schema\":\"previous_context_link_v1\",\"enabled\":true,\"visual\":true,\"audio\":true}},{\"id\":\"mtrtfrk4cs3z4\",\"start\":1215,\"length\":243,\"frameCount\":243,\"durationSec\":10,\"prompt\":\"There is a wide-angle shot of the Arctic hunter in the brown jacket and black pants, with the brown winter hat packing his equipment while kneeling down in the icy cold, and the polar bear comes up and looks at him in the face and then lays down on the ground. The large text of 'MiniMax H3' fades into view in the center of the screen and a British narrator calmly says, 'MiniMax H3' as the snowy wind blows over the tundra and the polar bear lets out a low growl. \",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"contextLink\":{\"schema\":\"previous_context_link_v1\",\"enabled\":true,\"visual\":true,\"audio\":true}}],\"width\":640,\"height\":640,\"refMaxSize\":640,\"timelineMode\":\"prompt_batch\",\"seedMode\":\"randomize\",\"gen\":{\"defaultFrameCount\":124},\"r2vCommon\":{\"refs\":[{\"index\":0,\"assetId\":\"r2v-common-picture-85c616ec-22a6-45a0-9f3c-5e926a24117e\",\"imageFile\":\"Akool V2_Make a full body front a.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":1,\"assetId\":\"r2v-common-picture-ca9005b7-c592-4347-878a-78cf298a8584\",\"imageFile\":\"GPT Image 2_Make a full body front a (1).png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":2,\"assetId\":\"r2v-common-picture-7f936272-ab15-4a84-87e5-867b51328f54\",\"imageFile\":\"Donnie Yen GPT Image 2_Make a full body front a.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":3,\"assetId\":\"r2v-common-picture-1c9c4b46-b6f1-4da1-beb6-0f207bccd702\",\"imageFile\":\"Donnie Yen - GPT Image 2_Make a full body front a.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":4,\"assetId\":\"r2v-common-picture-ee2611e6-02cd-487a-896f-68f9fd7575c2\",\"imageFile\":\"l-intro-1617213923.jpg\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":5,\"assetId\":\"r2v-common-picture-db749372-75b1-4013-918a-e53e01229d89\",\"imageFile\":\"Akool V2_Upscale the image {{6a9d.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"}],\"refAudios\":[],\"refVideos\":[]},\"audioRoles\":{\"version\":2,\"global\":{},\"segments\":{\"mtpxjrbl8nn2u\":{},\"mtqff62jnteai\":{},\"mtqffjtyz5re7\":{},\"mtqfu57ykd2ka\":{},\"mtqfxkw2ozo33\":{},\"mtqg42sbnqi0m\":{},\"mtqg5j1s0x65j\":{},\"mtqgfogmrjeyn\":{},\"mtqgnamfkuzqp\":{},\"mtqgvewjoyubf\":{},\"mtqh2z3q8ijwx\":{}}}}",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        "Cross-Segment Continuity",
+        true,
+        22,
+        null,
+        5,
+        true,
+        false,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        "Advanced sampling · Sampling: external",
+        25,
+        "res_multistep",
+        "simple",
+        12,
+        3,
+        null,
+        "Performance",
+        true,
+        false,
+        "Experimental",
+        false,
+        "{\"version\":9,\"global_refine\":{\"enabled\":true,\"mode\":\"refine\",\"second_sampling_enabled\":true,\"result_previews_enabled\":false,\"denoise\":\"0.25\",\"steps\":0,\"seed_mode\":\"inherit\",\"seed_offset\":1,\"skip_fl2v\":false,\"upscale_method\":\"lanczos\",\"upscale_model\":\"\",\"latent_upscale_model\":\"ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors\",\"latent_upscale_precision\":\"fp16\",\"latent_upscale_device\":\"cuda\",\"vsr_quality\":\"high\",\"resolution_mode\":\"follow_director\",\"aspect\":\"16:9\",\"megapixels\":1,\"width\":1376,\"height\":768,\"rtx_deblur_enabled\":false,\"rtx_deblur_quality\":\"medium\",\"rtx_deblur_strength\":1,\"passes\":1},\"face_refine\":{\"enabled\":false,\"detector\":\"ultralytics\",\"detector_model\":\"bbox\\\\face_yolov8m.pt\",\"confidence\":0.35,\"select\":\"largest\",\"crop_factor\":2.5,\"canvas_mode\":\"auto_capped_768\",\"canvas_size\":768,\"smooth_method\":\"gaussian\",\"smooth_window\":21,\"size_smooth_window\":51,\"size_mode\":\"adaptive\",\"adaptive\":true,\"base_denoise\":0.45,\"strength_small_face\":0.8,\"strength_large_face\":0.35,\"face_px_small\":30,\"face_px_large\":120,\"mask_mode\":\"rect\",\"paste_region\":\"face_rect\",\"feather\":24,\"colour_match\":true,\"blend\":1,\"undetected_frames\":\"fade\",\"identity_reference\":\"\",\"identity_track\":false,\"identity_threshold\":0.28,\"fallback_detector\":\"none\",\"fallback_head_frac\":0.5,\"gamma\":1,\"denoise_smooth\":9,\"mask_dilation\":24,\"feather_scales_with_crop\":false,\"sam_model\":\"\",\"sam_threshold\":0.93,\"sam_dilation\":0,\"sam_temporal_smooth\":5},\"preview\":{\"enabled\":true,\"preview_frames\":8,\"preview_fps\":12,\"max_resolution\":1024,\"jpeg_quality\":80,\"preview_every\":1},\"save\":{\"auto_save\":false,\"filename_prefix\":\"video/MiniMaxH3_Director\",\"format\":\"auto\",\"codec\":\"auto\",\"encoding\":\"auto\",\"crf\":23}}",
+        ""
+      ],
+      "widgets_values_named": {
+        "task_type": "t2v — 文生视频(Text to Video)",
+        "global_prompt": "",
+        "bd_grp_sample": "Sampling Settings  [External]",
+        "cfg": 1,
+        "seed": 601036732930444,
+        "control_after_generate": "randomize",
+        "frame_rate": 24,
+        "width": 640,
+        "height": 640,
+        "ref_max_size": 640,
+        "total_frames": 1458,
+        "timeline_data": "{\"version\":5,\"editMode\":\"segment\",\"totalFrames\":1458,\"frameRate\":24,\"video\":{\"fileName\":\"\",\"videoFile\":\"\",\"subfolder\":\"\",\"type\":\"input\",\"frames\":[],\"frameMap\":[],\"sourceFrameCount\":1852,\"deletedSourceRanges\":[]},\"videoClips\":[],\"global\":{\"taskType\":\"t2v — 文生视频(Text to Video)\",\"prompt\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"referenceVideo\":{\"videoFile\":\"\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},\"continuousReference\":false,\"genImage\":{\"imageFile\":\"\"}},\"output\":{\"mode\":\"fixed\",\"aspectRatio\":\"1:1 (方形)\",\"megapixels\":0.4,\"multiple\":32,\"longEdge\":640,\"width\":640,\"height\":640,\"maxExportFrames\":0,\"exportMode\":\"all\",\"audioMode\":\"generate\",\"continuityEnabled\":false,\"continuityOverlapFrames\":9},\"runSelectEnabled\":false,\"runSelection\":[],\"liveTaePreview\":true,\"segments\":[{\"id\":\"mtrrj0nq0ddfd\",\"start\":0,\"length\":243,\"frameCount\":243,\"durationSec\":10,\"prompt\":\"The scene takes place in an outdoor environment. An Arctic hunter  in a brown jacket and black pants with a brown winter hat, kneeling on the ground, checking the contents of his backpack. Snow blows in lightly over the icy ground and the audible howl of the wind can be heard across the icy tundra. The camera is fixed at a wide angle shot with large ice glaciers in the distance, and floating chunks of ice moving along the icy river. \",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"contextLink\":{\"schema\":\"previous_context_link_v1\",\"enabled\":false,\"visual\":false,\"audio\":false}},{\"id\":\"mtrrnpzkndij6\",\"start\":243,\"length\":243,\"frameCount\":243,\"durationSec\":10,\"prompt\":\"The Arctic hunter is kneeling on the ground, checking the contents of his backpack while a wide angle camera shot captures the action. The camera begins to move in closer with handheld camera movements, the crunch of the snow can be heard under each footstep while the camera continues to get closer to the Arctic hunter, until it's at a mid-body close-up. \",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"contextLink\":{\"schema\":\"previous_context_link_v1\",\"enabled\":true,\"visual\":true,\"audio\":true}},{\"id\":\"mtrrqki8aao4f\",\"start\":486,\"length\":243,\"frameCount\":243,\"durationSec\":10,\"prompt\":\"There is a side-profile close-up of the Arctic hunter's face, he has frost in his beard, and lines in his face from the harsh cold weather. He squints, and turns to the camera, his cold breath visible with each breath he takes. He nods slightly and smiles, saying in an Irish accent, 'One minute, single pass generations are now possible. The power of generative A I is now in the hands of low-end GPU users...', he pauses and chuckles.\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"contextLink\":{\"schema\":\"previous_context_link_v1\",\"enabled\":true,\"visual\":true,\"audio\":true}},{\"id\":\"mtrs0i17d3stt\",\"start\":729,\"length\":243,\"frameCount\":243,\"durationSec\":10,\"prompt\":\"With a close-up on the Arctic hunter's face, with frost in his beard, and lines in his face from the harsh cold weather, there is howling winds being heard as he continues to speak in a low voice, saying in an Irish accent, 'It's Comfy.... for you and I....' his voice trails off as he turns and looks off into the distance.\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"contextLink\":{\"schema\":\"previous_context_link_v1\",\"enabled\":true,\"visual\":true,\"audio\":true}},{\"id\":\"mtrs2geqvm53i\",\"start\":972,\"length\":243,\"frameCount\":243,\"durationSec\":10,\"prompt\":\"A polar bear can be seen walking in the distance. The polar bear grunts as it takes each deliberate step, the snow beneath its feet making audible sounds as he moves. The polar bear stops and then looks in the direction of the Arctic hunter. There is a close-up of the polar bear's eye where the reflection of the Arctic hunter can be seen in the polar's eye.\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"contextLink\":{\"schema\":\"previous_context_link_v1\",\"enabled\":true,\"visual\":true,\"audio\":true}},{\"id\":\"mtrtfrk4cs3z4\",\"start\":1215,\"length\":243,\"frameCount\":243,\"durationSec\":10,\"prompt\":\"There is a wide-angle shot of the Arctic hunter in the brown jacket and black pants, with the brown winter hat packing his equipment while kneeling down in the icy cold, and the polar bear comes up and looks at him in the face and then lays down on the ground. The large text of 'MiniMax H3' fades into view in the center of the screen and a British narrator calmly says, 'MiniMax H3' as the snowy wind blows over the tundra and the polar bear lets out a low growl. \",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"contextLink\":{\"schema\":\"previous_context_link_v1\",\"enabled\":true,\"visual\":true,\"audio\":true}}],\"width\":640,\"height\":640,\"refMaxSize\":640,\"timelineMode\":\"prompt_batch\",\"seedMode\":\"randomize\",\"gen\":{\"defaultFrameCount\":124},\"r2vCommon\":{\"refs\":[{\"index\":0,\"assetId\":\"r2v-common-picture-85c616ec-22a6-45a0-9f3c-5e926a24117e\",\"imageFile\":\"Akool V2_Make a full body front a.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":1,\"assetId\":\"r2v-common-picture-ca9005b7-c592-4347-878a-78cf298a8584\",\"imageFile\":\"GPT Image 2_Make a full body front a (1).png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":2,\"assetId\":\"r2v-common-picture-7f936272-ab15-4a84-87e5-867b51328f54\",\"imageFile\":\"Donnie Yen GPT Image 2_Make a full body front a.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":3,\"assetId\":\"r2v-common-picture-1c9c4b46-b6f1-4da1-beb6-0f207bccd702\",\"imageFile\":\"Donnie Yen - GPT Image 2_Make a full body front a.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":4,\"assetId\":\"r2v-common-picture-ee2611e6-02cd-487a-896f-68f9fd7575c2\",\"imageFile\":\"l-intro-1617213923.jpg\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":5,\"assetId\":\"r2v-common-picture-db749372-75b1-4013-918a-e53e01229d89\",\"imageFile\":\"Akool V2_Upscale the image {{6a9d.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"}],\"refAudios\":[],\"refVideos\":[]},\"audioRoles\":{\"version\":2,\"global\":{},\"segments\":{\"mtpxjrbl8nn2u\":{},\"mtqff62jnteai\":{},\"mtqffjtyz5re7\":{},\"mtqfu57ykd2ka\":{},\"mtqfxkw2ozo33\":{},\"mtqg42sbnqi0m\":{},\"mtqg5j1s0x65j\":{},\"mtqgfogmrjeyn\":{},\"mtqgnamfkuzqp\":{},\"mtqgvewjoyubf\":{},\"mtqh2z3q8ijwx\":{}}}}",
+        "bd_grp_motion": "Cross-Segment Continuity",
+        "motion_context_enabled": true,
+        "context_length": 22,
+        "source_overlap_frames": 5,
+        "audio_context_enabled": true,
+        "color_reanchor_enabled": false,
+        "bd_grp_advanced": "Advanced sampling · Sampling: external",
+        "steps": 25,
+        "sampler_name": "res_multistep",
+        "scheduler": "simple",
+        "shift_video": 12,
+        "shift_audio": 3,
+        "bd_grp_perf": "Performance",
+        "clear_vram_between_segments": true,
+        "export_source_images": false,
+        "bd_grp_experimental": "Experimental",
+        "pin_renorm_enabled": false,
+        "postprocess_config": "{\"version\":9,\"global_refine\":{\"enabled\":true,\"mode\":\"refine\",\"second_sampling_enabled\":true,\"result_previews_enabled\":false,\"denoise\":\"0.25\",\"steps\":0,\"seed_mode\":\"inherit\",\"seed_offset\":1,\"skip_fl2v\":false,\"upscale_method\":\"lanczos\",\"upscale_model\":\"\",\"latent_upscale_model\":\"ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors\",\"latent_upscale_precision\":\"fp16\",\"latent_upscale_device\":\"cuda\",\"vsr_quality\":\"high\",\"resolution_mode\":\"follow_director\",\"aspect\":\"16:9\",\"megapixels\":1,\"width\":1376,\"height\":768,\"rtx_deblur_enabled\":false,\"rtx_deblur_quality\":\"medium\",\"rtx_deblur_strength\":1,\"passes\":1},\"face_refine\":{\"enabled\":false,\"detector\":\"ultralytics\",\"detector_model\":\"bbox\\\\face_yolov8m.pt\",\"confidence\":0.35,\"select\":\"largest\",\"crop_factor\":2.5,\"canvas_mode\":\"auto_capped_768\",\"canvas_size\":768,\"smooth_method\":\"gaussian\",\"smooth_window\":21,\"size_smooth_window\":51,\"size_mode\":\"adaptive\",\"adaptive\":true,\"base_denoise\":0.45,\"strength_small_face\":0.8,\"strength_large_face\":0.35,\"face_px_small\":30,\"face_px_large\":120,\"mask_mode\":\"rect\",\"paste_region\":\"face_rect\",\"feather\":24,\"colour_match\":true,\"blend\":1,\"undetected_frames\":\"fade\",\"identity_reference\":\"\",\"identity_track\":false,\"identity_threshold\":0.28,\"fallback_detector\":\"none\",\"fallback_head_frac\":0.5,\"gamma\":1,\"denoise_smooth\":9,\"mask_dilation\":24,\"feather_scales_with_crop\":false,\"sam_model\":\"\",\"sam_threshold\":0.93,\"sam_dilation\":0,\"sam_temporal_smooth\":5},\"preview\":{\"enabled\":true,\"preview_frames\":8,\"preview_fps\":12,\"max_resolution\":1024,\"jpeg_quality\":80,\"preview_every\":1},\"save\":{\"auto_save\":false,\"filename_prefix\":\"video/MiniMaxH3_Director\",\"format\":\"auto\",\"codec\":\"auto\",\"encoding\":\"auto\",\"crf\":23}}",
+        "minimax_motion_director_ui": ""
+      }
+    },
+    {
+      "id": 61,
+      "type": "efbc0561-6411-4699-bb6a-eca5412f45b9",
+      "pos": [
+        1760,
+        2300
+      ],
+      "size": [
+        220,
+        180
+      ],
+      "flags": {
+        "collapsed": true
+      },
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "switch",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "switch"
+          },
+          "link": 122
+        },
+        {
+          "name": "switch_1",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "switch_1"
+          },
+          "link": 136
+        }
+      ],
+      "outputs": [
+        {
+          "name": "SAMPLER",
+          "type": "SAMPLER",
+          "links": [
+            123
+          ]
+        },
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            124
+          ]
+        },
+        {
+          "name": "VAE_1",
+          "type": "VAE",
+          "links": [
+            125
+          ]
+        },
+        {
+          "name": "SIGMAS",
+          "type": "SIGMAS",
+          "links": [
+            126
+          ]
+        },
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            127
+          ]
+        },
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            128
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.34.1",
+        "previewExposures": []
+      },
+      "widgets_values": [
+        false,
+        false
+      ],
+      "widgets_values_named": {
+        "switch": false,
+        "switch_1": false
+      }
+    },
+    {
+      "id": 57,
+      "type": "PrimitiveNode",
+      "pos": [
+        1680,
+        2320
+      ],
+      "size": [
+        220,
+        100
+      ],
+      "flags": {
+        "pinned": true
+      },
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "BOOLEAN",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "switch"
+          },
+          "links": [
+            122,
+            136
+          ]
+        }
+      ],
+      "title": "Master Turbo Toggle",
+      "properties": {
+        "Run widget replace on values": false
+      },
+      "widgets_values": [
+        false
+      ],
+      "widgets_values_named": {
+        "value": false
+      },
+      "color": "#223",
+      "bgcolor": "#335"
+    }
+  ],
+  "links": [
+    [
+      49,
+      17,
+      0,
+      19,
+      0,
+      "IMAGE"
+    ],
+    [
+      50,
+      17,
+      1,
+      19,
+      1,
+      "AUDIO"
+    ],
+    [
+      51,
+      17,
+      2,
+      19,
+      2,
+      "FLOAT"
+    ],
+    [
+      52,
+      19,
+      0,
+      7,
+      0,
+      "VIDEO"
+    ],
+    [
+      122,
+      57,
+      0,
+      61,
+      0,
+      "BOOLEAN"
+    ],
+    [
+      123,
+      61,
+      0,
+      17,
+      4,
+      "SAMPLER"
+    ],
+    [
+      124,
+      61,
+      1,
+      17,
+      1,
+      "VAE"
+    ],
+    [
+      125,
+      61,
+      2,
+      17,
+      2,
+      "VAE"
+    ],
+    [
+      126,
+      61,
+      3,
+      17,
+      5,
+      "SIGMAS"
+    ],
+    [
+      127,
+      61,
+      4,
+      17,
+      3,
+      "CLIP"
+    ],
+    [
+      128,
+      61,
+      5,
+      17,
+      0,
+      "MODEL"
+    ],
+    [
+      136,
+      57,
+      0,
+      61,
+      1,
+      "BOOLEAN"
+    ]
+  ],
+  "groups": [],
+  "definitions": {
+    "subgraphs": [
+      {
+        "id": "fee7a5d7-f8fc-43f9-a0be-176fc848b76e",
+        "version": 1,
+        "state": {
+          "lastGroupId": 2,
+          "lastNodeId": 62,
+          "lastLinkId": 138,
+          "lastRerouteId": 0
+        },
+        "revision": 0,
+        "config": {},
+        "name": "New Subgraph",
+        "inputNode": {
+          "id": -10,
+          "bounding": [
+            2512,
+            2521,
+            128,
+            108
+          ]
+        },
+        "outputNode": {
+          "id": -20,
+          "bounding": [
+            3200,
+            2541,
+            128,
+            68
+          ]
+        },
+        "inputs": [
+          {
+            "id": "de58ee1e-4efa-43dd-8ce7-b612038aa3f7",
+            "name": "image",
+            "type": "IMAGE",
+            "linkIds": [
+              40
+            ],
+            "localized_name": "image",
+            "pos": [
+              51,
+              24
+            ]
+          },
+          {
+            "id": "8321b1ba-3a2a-4913-9a73-7536175e882f",
+            "name": "audio",
+            "type": "AUDIO",
+            "linkIds": [
+              41
+            ],
+            "localized_name": "audio",
+            "shape": 7,
+            "pos": [
+              51,
+              44
+            ]
+          },
+          {
+            "id": "37b61536-3aff-4eee-8a50-be1e6542d545",
+            "name": "fps",
+            "type": "FLOAT",
+            "linkIds": [
+              42
+            ],
+            "localized_name": "fps",
+            "pos": [
+              51,
+              64
+            ]
+          }
+        ],
+        "outputs": [
+          {
+            "id": "48552753-1c31-4303-8bf2-97776b880a75",
+            "name": "VIDEO",
+            "type": "VIDEO",
+            "linkIds": [
+              15
+            ],
+            "localized_name": "VIDEO",
+            "pos": [
+              24,
+              24
+            ]
+          }
+        ],
+        "widgets": [],
+        "nodes": [
+          {
+            "id": 14,
+            "type": "FreeMemoryImage",
+            "pos": [
+              2700,
+              2420
+            ],
+            "size": [
+              280,
+              60
+            ],
+            "flags": {},
+            "order": 1,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "image",
+                "name": "image",
+                "type": "IMAGE",
+                "link": 40
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "IMAGE",
+                "name": "IMAGE",
+                "type": "IMAGE",
+                "links": [
+                  19
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "ComfyUI-FreeMemory",
+              "ver": "44fc13f97feec9fdb50ccf342ad64eeb52a95512",
+              "Node name for S&R": "FreeMemoryImage"
+            },
+            "widgets_values": [
+              true
+            ],
+            "widgets_values_named": {
+              "aggressive": true
+            }
+          },
+          {
+            "id": 6,
+            "type": "CreateVideo",
+            "pos": [
+              2860,
+              2620
+            ],
+            "size": [
+              280,
+              140
+            ],
+            "flags": {},
+            "order": 0,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "images",
+                "name": "images",
+                "type": "IMAGE",
+                "link": 19
+              },
+              {
+                "localized_name": "audio",
+                "name": "audio",
+                "shape": 7,
+                "type": "AUDIO",
+                "link": 41
+              },
+              {
+                "localized_name": "fps",
+                "name": "fps",
+                "type": "FLOAT",
+                "widget": {
+                  "name": "fps"
+                },
+                "link": 42
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "VIDEO",
+                "name": "VIDEO",
+                "type": "VIDEO",
+                "links": [
+                  15
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.34.1"
+            },
+            "widgets_values": [
+              24,
+              "auto",
+              "sRGB"
+            ],
+            "widgets_values_named": {
+              "fps": 24,
+              "bit_depth": "auto",
+              "color_space": "sRGB"
+            }
+          }
+        ],
+        "groups": [],
+        "links": [
+          {
+            "id": 19,
+            "origin_id": 14,
+            "origin_slot": 0,
+            "target_id": 6,
+            "target_slot": 0,
+            "type": "IMAGE"
+          },
+          {
+            "id": 40,
+            "origin_id": -10,
+            "origin_slot": 0,
+            "target_id": 14,
+            "target_slot": 0,
+            "type": "IMAGE"
+          },
+          {
+            "id": 41,
+            "origin_id": -10,
+            "origin_slot": 1,
+            "target_id": 6,
+            "target_slot": 1,
+            "type": "AUDIO"
+          },
+          {
+            "id": 42,
+            "origin_id": -10,
+            "origin_slot": 2,
+            "target_id": 6,
+            "target_slot": 2,
+            "type": "FLOAT"
+          },
+          {
+            "id": 15,
+            "origin_id": 6,
+            "origin_slot": 0,
+            "target_id": -20,
+            "target_slot": 0,
+            "type": "VIDEO"
+          }
+        ],
+        "extra": {}
+      },
+      {
+        "id": "efbc0561-6411-4699-bb6a-eca5412f45b9",
+        "version": 1,
+        "state": {
+          "lastGroupId": 2,
+          "lastNodeId": 62,
+          "lastLinkId": 138,
+          "lastRerouteId": 0
+        },
+        "revision": 0,
+        "config": {},
+        "name": "New Subgraph",
+        "inputNode": {
+          "id": -10,
+          "bounding": [
+            442,
+            2115,
+            128,
+            88
+          ]
+        },
+        "outputNode": {
+          "id": -20,
+          "bounding": [
+            1770,
+            2065,
+            128,
+            168
+          ]
+        },
+        "inputs": [
+          {
+            "id": "83c7c1d5-d259-4fe6-bda0-9d797d9cb322",
+            "name": "switch",
+            "type": "BOOLEAN",
+            "linkIds": [
+              137
+            ],
+            "localized_name": "switch",
+            "pos": [
+              546,
+              2139
+            ]
+          },
+          {
+            "id": "78c16771-fa15-40db-8fce-58dc9620b5d6",
+            "name": "switch_1",
+            "type": "BOOLEAN",
+            "linkIds": [
+              138
+            ],
+            "pos": [
+              546,
+              2159
+            ]
+          }
+        ],
+        "outputs": [
+          {
+            "id": "11027ca0-1061-4aae-a676-57c8105c75d5",
+            "name": "SAMPLER",
+            "type": "SAMPLER",
+            "linkIds": [
+              81
+            ],
+            "localized_name": "SAMPLER",
+            "pos": [
+              1794,
+              2089
+            ]
+          },
+          {
+            "id": "058c5105-c412-4911-840c-eb420a351536",
+            "name": "VAE",
+            "type": "VAE",
+            "linkIds": [
+              82
+            ],
+            "localized_name": "VAE",
+            "pos": [
+              1794,
+              2109
+            ]
+          },
+          {
+            "id": "4333c06a-ba61-4e57-b0bf-10dc6986ad8c",
+            "name": "VAE_1",
+            "type": "VAE",
+            "linkIds": [
+              84
+            ],
+            "localized_name": "VAE_1",
+            "pos": [
+              1794,
+              2129
+            ]
+          },
+          {
+            "id": "be2d038b-2b95-40fa-a80c-187fdd75da42",
+            "name": "SIGMAS",
+            "type": "SIGMAS",
+            "linkIds": [
+              83
+            ],
+            "localized_name": "SIGMAS",
+            "pos": [
+              1794,
+              2149
+            ]
+          },
+          {
+            "id": "49184dc7-48a3-4038-8a11-5a138d9620e6",
+            "name": "CLIP",
+            "type": "CLIP",
+            "linkIds": [
+              85
+            ],
+            "localized_name": "CLIP",
+            "pos": [
+              1794,
+              2169
+            ]
+          },
+          {
+            "id": "eb6d1edb-fa7b-4326-9ad7-b9d3c6ea95a9",
+            "name": "MODEL",
+            "type": "MODEL",
+            "linkIds": [
+              117
+            ],
+            "localized_name": "MODEL",
+            "pos": [
+              1794,
+              2189
+            ]
+          }
+        ],
+        "widgets": [],
+        "nodes": [
+          {
+            "id": 37,
+            "type": "KSamplerSelect",
+            "pos": [
+              640,
+              1680
+            ],
+            "size": [
+              280,
+              60
+            ],
+            "flags": {},
+            "order": 0,
+            "mode": 0,
+            "inputs": [],
+            "outputs": [
+              {
+                "localized_name": "SAMPLER",
+                "name": "SAMPLER",
+                "type": "SAMPLER",
+                "links": [
+                  81
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.34.1"
+            },
+            "widgets_values": [
+              "er_sde"
+            ],
+            "widgets_values_named": {
+              "sampler_name": "er_sde"
+            }
+          },
+          {
+            "id": 39,
+            "type": "VAELoader",
+            "pos": [
+              640,
+              1860
+            ],
+            "size": [
+              640,
+              100
+            ],
+            "flags": {},
+            "order": 1,
+            "mode": 0,
+            "inputs": [],
+            "outputs": [
+              {
+                "localized_name": "VAE",
+                "name": "VAE",
+                "type": "VAE",
+                "links": [
+                  82
+                ]
+              }
+            ],
+            "title": "Load Video VAE",
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.33.0",
+              "Node name for S&R": "VAELoader",
+              "models": [
+                {
+                  "name": "minimax_h3_video_vae_fp16.safetensors",
+                  "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_video_vae_fp16.safetensors",
+                  "directory": "vae"
+                }
+              ]
+            },
+            "widgets_values": [
+              "minimax_h3_video_vae_fp16.safetensors"
+            ],
+            "widgets_values_named": {
+              "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+            }
+          },
+          {
+            "id": 38,
+            "type": "VAELoader",
+            "pos": [
+              640,
+              2000
+            ],
+            "size": [
+              640,
+              100
+            ],
+            "flags": {},
+            "order": 2,
+            "mode": 0,
+            "inputs": [],
+            "outputs": [
+              {
+                "localized_name": "VAE",
+                "name": "VAE",
+                "type": "VAE",
+                "links": [
+                  84
+                ]
+              }
+            ],
+            "title": "Load Audio VAE",
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.33.0",
+              "Node name for S&R": "VAELoader",
+              "models": [
+                {
+                  "name": "minimax_h3_video_vae_fp16.safetensors",
+                  "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_video_vae_fp16.safetensors",
+                  "directory": "vae"
+                }
+              ]
+            },
+            "widgets_values": [
+              "minimax_h3_audio_vae_fp32.safetensors"
+            ],
+            "widgets_values_named": {
+              "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+            }
+          },
+          {
+            "id": 44,
+            "type": "BasicScheduler",
+            "pos": [
+              940,
+              1660
+            ],
+            "size": [
+              380,
+              160
+            ],
+            "flags": {},
+            "order": 11,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "model",
+                "name": "model",
+                "type": "MODEL",
+                "link": 109
+              },
+              {
+                "localized_name": "steps",
+                "name": "steps",
+                "type": "INT",
+                "widget": {
+                  "name": "steps"
+                },
+                "link": 99
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "SIGMAS",
+                "name": "SIGMAS",
+                "type": "SIGMAS",
+                "links": [
+                  83
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.33.0",
+              "Node name for S&R": "BasicScheduler"
+            },
+            "widgets_values": [
+              "simple",
+              20,
+              1
+            ],
+            "widgets_values_named": {
+              "scheduler": "simple",
+              "steps": 20,
+              "denoise": 1
+            }
+          },
+          {
+            "id": 40,
+            "type": "UNETLoader",
+            "pos": [
+              640,
+              2140
+            ],
+            "size": [
+              640,
+              120
+            ],
+            "flags": {},
+            "order": 3,
+            "mode": 0,
+            "inputs": [],
+            "outputs": [
+              {
+                "localized_name": "MODEL",
+                "name": "MODEL",
+                "type": "MODEL",
+                "links": [
+                  86
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.33.0",
+              "Node name for S&R": "UNETLoader",
+              "models": [
+                {
+                  "name": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+                  "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+                  "directory": "diffusion_models"
+                }
+              ]
+            },
+            "widgets_values": [
+              "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+              "default"
+            ],
+            "widgets_values_named": {
+              "unet_name": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+              "weight_dtype": "default"
+            }
+          },
+          {
+            "id": 43,
+            "type": "H3ClipLoaderAny",
+            "pos": [
+              960,
+              2320
+            ],
+            "size": [
+              360,
+              120
+            ],
+            "flags": {},
+            "order": 4,
+            "mode": 0,
+            "inputs": [],
+            "outputs": [
+              {
+                "localized_name": "CLIP",
+                "name": "CLIP",
+                "type": "CLIP",
+                "links": [
+                  85
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfyui-h3-multishot",
+              "ver": "870c3e3871942c2f3477c0d0c9bddcf0a5a37191",
+              "Node name for S&R": "H3ClipLoaderAny"
+            },
+            "widgets_values": [
+              "qwen3vl_32b_minimax_h3_int4_convrot.safetensors",
+              "minimax",
+              "(auto)"
+            ],
+            "widgets_values_named": {
+              "clip_name": "qwen3vl_32b_minimax_h3_int4_convrot.safetensors",
+              "type": "minimax",
+              "mmproj_name": "(auto)"
+            }
+          },
+          {
+            "id": 42,
+            "type": "PathchSageAttentionKJ",
+            "pos": [
+              640,
+              2320
+            ],
+            "size": [
+              280,
+              100
+            ],
+            "flags": {},
+            "order": 10,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "model",
+                "name": "model",
+                "type": "MODEL",
+                "link": 131
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "MODEL",
+                "name": "MODEL",
+                "type": "MODEL",
+                "links": [
+                  109,
+                  116
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfyui-kjnodes",
+              "ver": "1.5.0"
+            },
+            "widgets_values": [
+              "auto",
+              false
+            ],
+            "widgets_values_named": {
+              "sage_attention": "auto",
+              "allow_compile": false
+            }
+          },
+          {
+            "id": 60,
+            "type": "FloatConstant",
+            "pos": [
+              640,
+              2620
+            ],
+            "size": [
+              220,
+              60
+            ],
+            "flags": {},
+            "order": 5,
+            "mode": 0,
+            "inputs": [],
+            "outputs": [
+              {
+                "localized_name": "value",
+                "name": "value",
+                "type": "FLOAT",
+                "links": [
+                  119
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfyui-kjnodes",
+              "ver": "1.5.0"
+            },
+            "widgets_values": [
+              1
+            ],
+            "widgets_values_named": {
+              "value": 1
+            },
+            "color": "#232",
+            "bgcolor": "#353"
+          },
+          {
+            "id": 41,
+            "type": "MiniMaxH3DiffAidSparsePatch",
+            "pos": [
+              1360,
+              1700
+            ],
+            "size": [
+              340,
+              280
+            ],
+            "flags": {},
+            "order": 9,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "model",
+                "name": "model",
+                "type": "MODEL",
+                "link": 86
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "model",
+                "name": "model",
+                "type": "MODEL",
+                "links": [
+                  131
+                ]
+              },
+              {
+                "localized_name": "summary",
+                "name": "summary",
+                "type": "STRING",
+                "links": []
+              }
+            ],
+            "title": "MiniMax H3 Diff-Aid Sparse Patch (LoRA)",
+            "properties": {
+              "cnr_id": "diffaid-patches",
+              "ver": "1.0.6"
+            },
+            "widgets_values": [
+              true,
+              "1,13,25,37,50",
+              0.2,
+              0,
+              1,
+              0,
+              "none",
+              0.35,
+              true
+            ],
+            "widgets_values_named": {
+              "enabled": true,
+              "block_indices": "1,13,25,37,50",
+              "strength": 0.2,
+              "sigma_start": 0,
+              "sigma_end": 1,
+              "sigma_ramp": 0,
+              "token_weight_mode": "none",
+              "token_tail": 0.35,
+              "cond_only": true
+            }
+          },
+          {
+            "id": 50,
+            "type": "INTConstant",
+            "pos": [
+              640,
+              2740
+            ],
+            "size": [
+              220,
+              60
+            ],
+            "flags": {},
+            "order": 6,
+            "mode": 0,
+            "inputs": [],
+            "outputs": [
+              {
+                "localized_name": "value",
+                "name": "value",
+                "type": "INT",
+                "links": [
+                  90
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfyui-kjnodes",
+              "ver": "1.5.0"
+            },
+            "widgets_values": [
+              20
+            ],
+            "widgets_values_named": {
+              "value": 20
+            },
+            "color": "#1b4669",
+            "bgcolor": "#29699c"
+          },
+          {
+            "id": 51,
+            "type": "INTConstant",
+            "pos": [
+              900,
+              2760
+            ],
+            "size": [
+              220,
+              60
+            ],
+            "flags": {},
+            "order": 7,
+            "mode": 0,
+            "inputs": [],
+            "outputs": [
+              {
+                "localized_name": "value",
+                "name": "value",
+                "type": "INT",
+                "links": [
+                  91
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfyui-kjnodes",
+              "ver": "1.5.0"
+            },
+            "widgets_values": [
+              8
+            ],
+            "widgets_values_named": {
+              "value": 8
+            },
+            "color": "#1b4669",
+            "bgcolor": "#29699c"
+          },
+          {
+            "id": 59,
+            "type": "FloatConstant",
+            "pos": [
+              900,
+              2620
+            ],
+            "size": [
+              220,
+              60
+            ],
+            "flags": {},
+            "order": 8,
+            "mode": 0,
+            "inputs": [],
+            "outputs": [
+              {
+                "localized_name": "value",
+                "name": "value",
+                "type": "FLOAT",
+                "links": [
+                  118
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfyui-kjnodes",
+              "ver": "1.5.0"
+            },
+            "widgets_values": [
+              0
+            ],
+            "widgets_values_named": {
+              "value": 0
+            },
+            "color": "#232",
+            "bgcolor": "#353"
+          },
+          {
+            "id": 48,
+            "type": "ComfySwitchNode",
+            "pos": [
+              1380,
+              2080
+            ],
+            "size": [
+              280,
+              80
+            ],
+            "flags": {},
+            "order": 13,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "on_false",
+                "name": "on_false",
+                "type": "INT",
+                "link": 90
+              },
+              {
+                "localized_name": "on_true",
+                "name": "on_true",
+                "type": "INT",
+                "link": 91
+              },
+              {
+                "localized_name": "switch",
+                "name": "switch",
+                "type": "BOOLEAN",
+                "widget": {
+                  "name": "switch"
+                },
+                "link": 137
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "output",
+                "name": "output",
+                "type": "INT",
+                "links": [
+                  99
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.34.1"
+            },
+            "widgets_values": [
+              true
+            ],
+            "widgets_values_named": {
+              "switch": true
+            }
+          },
+          {
+            "id": 58,
+            "type": "ComfySwitchNode",
+            "pos": [
+              1280,
+              2580
+            ],
+            "size": [
+              280,
+              80
+            ],
+            "flags": {},
+            "order": 14,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "on_false",
+                "name": "on_false",
+                "type": "FLOAT",
+                "link": 118
+              },
+              {
+                "localized_name": "on_true",
+                "name": "on_true",
+                "type": "FLOAT",
+                "link": 119
+              },
+              {
+                "localized_name": "switch",
+                "name": "switch",
+                "type": "BOOLEAN",
+                "widget": {
+                  "name": "switch"
+                },
+                "link": 138
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "output",
+                "name": "output",
+                "type": "FLOAT",
+                "links": [
+                  120
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.34.1"
+            },
+            "widgets_values": [
+              true
+            ],
+            "widgets_values_named": {
+              "switch": true
+            }
+          },
+          {
+            "id": 45,
+            "type": "LoraLoaderModelOnly",
+            "pos": [
+              640,
+              2480
+            ],
+            "size": [
+              280,
+              100
+            ],
+            "flags": {},
+            "order": 12,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "model",
+                "name": "model",
+                "type": "MODEL",
+                "link": 116
+              },
+              {
+                "localized_name": "strength_model",
+                "name": "strength_model",
+                "type": "FLOAT",
+                "widget": {
+                  "name": "strength_model"
+                },
+                "link": 120
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "MODEL",
+                "name": "MODEL",
+                "type": "MODEL",
+                "links": [
+                  117
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.34.1"
+            },
+            "widgets_values": [
+              "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
+              1
+            ],
+            "widgets_values_named": {
+              "lora_name": "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
+              "strength_model": 1
+            }
+          }
+        ],
+        "groups": [
+          {
+            "id": 1,
+            "title": "VAE / Sampler / Sage",
+            "bounding": [
+              640,
+              1600,
+              1140,
+              1280
+            ],
+            "color": "#3f789e",
+            "flags": {}
+          }
+        ],
+        "links": [
+          {
+            "id": 109,
+            "origin_id": 42,
+            "origin_slot": 0,
+            "target_id": 44,
+            "target_slot": 0,
+            "type": "MODEL"
+          },
+          {
+            "id": 99,
+            "origin_id": 48,
+            "origin_slot": 0,
+            "target_id": 44,
+            "target_slot": 1,
+            "type": "INT"
+          },
+          {
+            "id": 86,
+            "origin_id": 40,
+            "origin_slot": 0,
+            "target_id": 41,
+            "target_slot": 0,
+            "type": "MODEL"
+          },
+          {
+            "id": 90,
+            "origin_id": 50,
+            "origin_slot": 0,
+            "target_id": 48,
+            "target_slot": 0,
+            "type": "INT"
+          },
+          {
+            "id": 91,
+            "origin_id": 51,
+            "origin_slot": 0,
+            "target_id": 48,
+            "target_slot": 1,
+            "type": "INT"
+          },
+          {
+            "id": 116,
+            "origin_id": 42,
+            "origin_slot": 0,
+            "target_id": 45,
+            "target_slot": 0,
+            "type": "MODEL"
+          },
+          {
+            "id": 120,
+            "origin_id": 58,
+            "origin_slot": 0,
+            "target_id": 45,
+            "target_slot": 1,
+            "type": "FLOAT"
+          },
+          {
+            "id": 118,
+            "origin_id": 59,
+            "origin_slot": 0,
+            "target_id": 58,
+            "target_slot": 0,
+            "type": "FLOAT"
+          },
+          {
+            "id": 119,
+            "origin_id": 60,
+            "origin_slot": 0,
+            "target_id": 58,
+            "target_slot": 1,
+            "type": "FLOAT"
+          },
+          {
+            "id": 81,
+            "origin_id": 37,
+            "origin_slot": 0,
+            "target_id": -20,
+            "target_slot": 0,
+            "type": "SAMPLER"
+          },
+          {
+            "id": 82,
+            "origin_id": 39,
+            "origin_slot": 0,
+            "target_id": -20,
+            "target_slot": 1,
+            "type": "VAE"
+          },
+          {
+            "id": 84,
+            "origin_id": 38,
+            "origin_slot": 0,
+            "target_id": -20,
+            "target_slot": 2,
+            "type": "VAE"
+          },
+          {
+            "id": 83,
+            "origin_id": 44,
+            "origin_slot": 0,
+            "target_id": -20,
+            "target_slot": 3,
+            "type": "SIGMAS"
+          },
+          {
+            "id": 85,
+            "origin_id": 43,
+            "origin_slot": 0,
+            "target_id": -20,
+            "target_slot": 4,
+            "type": "CLIP"
+          },
+          {
+            "id": 117,
+            "origin_id": 45,
+            "origin_slot": 0,
+            "target_id": -20,
+            "target_slot": 5,
+            "type": "MODEL"
+          },
+          {
+            "id": 131,
+            "origin_id": 41,
+            "origin_slot": 0,
+            "target_id": 42,
+            "target_slot": 0,
+            "type": "MODEL"
+          },
+          {
+            "id": 137,
+            "origin_id": -10,
+            "origin_slot": 0,
+            "target_id": 48,
+            "target_slot": 2,
+            "type": "BOOLEAN"
+          },
+          {
+            "id": 138,
+            "origin_id": -10,
+            "origin_slot": 1,
+            "target_id": 58,
+            "target_slot": 2,
+            "type": "BOOLEAN"
+          }
+        ],
+        "extra": {}
+      }
+    ]
+  },
+  "config": {},
+  "extra": {
+    "comfyui_mcp": {
+      "workflow_uuid": "b4900ff8-e024-4d7e-9b9b-66f7bd5cf4d7"
+    },
+    "ds": {
+      "scale": 0.6108557339449552,
+      "offset": [
+        -1308.4533331444923,
+        -2138.0184232842475
+      ]
+    },
+    "frontendVersion": "1.49.6",
+    "VHS_latentpreview": false,
+    "VHS_latentpreviewrate": 0,
+    "VHS_MetadataImage": true,
+    "VHS_KeepIntermediate": true
+  },
+  "version": 0.4
+}
