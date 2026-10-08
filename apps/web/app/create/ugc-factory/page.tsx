@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CommercialContextPicker, type CommercialSelection } from "@/components/commerce/CommercialContextPicker";
+import { FactoryWizard } from "@/components/create/FactoryWizard";
 import { FactoryCarouselWorkspace } from "@/components/commerce/FactoryCarouselWorkspace";
 import { FactoryReferenceWorkspace } from "@/components/commerce/FactoryReferenceWorkspace";
 import type { CarouselDoc } from "@/lib/factory-carousel-layout";
@@ -177,6 +178,7 @@ export default function UgcFactoryPage() {
   const [createMode, setCreateMode] = useState<"CAROUSEL" | "TEMPLATE" | "REFERENCE_RECREATE">("CAROUSEL");
   const [scriptMode, setScriptMode] = useState<"recreate" | "revamp">("recreate");
   const [createReference, setCreateReference] = useState("");
+  const [home, setHome] = useState<"wizard" | "drafts">("wizard");
   const [referenceChoices, setReferenceChoices] = useState<{ id: string; creator: string | null; version: number | null }[]>([]);
 
   async function load() {
@@ -209,6 +211,7 @@ export default function UgcFactoryPage() {
     const production = params.get("production");
     const product = params.get("product");
     if (production && board.productions.some((row) => row.id === production)) {
+      setHome("drafts");
       setOpenId(production);
       const row = board.productions.find((item) => item.id === production);
       if (row?.plan?.beats.some((beat) => beat.sourceStartSec != null)) setDrawerTab("script");
@@ -367,6 +370,14 @@ export default function UgcFactoryPage() {
     }
   }
 
+  if (!openId && home === "wizard") {
+    return (
+      <div className="min-w-0 max-w-full overflow-x-clip px-4 py-5 md:px-6 md:py-6">
+        <FactoryWizard onEarlier={() => setHome("drafts")} />
+      </div>
+    );
+  }
+
   return (
     <div className="min-w-0 px-4 py-5 md:px-6 md:py-6">
       {detail?.planningMode === "REFERENCE_RECREATE" || detail?.planningMode === "CAROUSEL" ? null : <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
@@ -374,7 +385,10 @@ export default function UgcFactoryPage() {
           <p className="text-[11px] font-semibold tracking-[0.18em] text-[#652DFF]">UGC FACTORY</p>
           <h1 className="mt-0.5 text-[22px] font-black tracking-tight">My Productions</h1>
         </div>
-        <Btn type="button" onClick={() => setPanel(true)}>Create production</Btn>
+        <div className="flex flex-wrap gap-2">
+          <Btn type="button" variant="ghost" onClick={() => { setOpenId(""); setHome("wizard"); }}>New ad</Btn>
+          <Btn type="button" onClick={() => setPanel(true)}>Create production</Btn>
+        </div>
       </div>}
       {detail?.planningMode === "REFERENCE_RECREATE" || detail?.planningMode === "CAROUSEL" ? null : <div className="mb-3 flex gap-1 overflow-x-auto" role="tablist" aria-label="Production status">
         {STAGES.map(([id, label]) => {
