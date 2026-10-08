@@ -1,4 +1,4 @@
-# 03:00 daily: hibernate this PC unless a real GPU job is in Comfy.
+# 04:00 daily: hibernate this PC unless a real GPU job is in Comfy.
 # Hibernate (not shutdown) so 08:00 Task Scheduler can wake it.
 # Does NOT kill UltraViewer first — machine is going to sleep anyway.
 

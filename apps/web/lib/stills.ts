@@ -1,7 +1,6 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
+import { hasXaiProvider } from "./api-providers";
 import { cloudTxt2Img, isCloudImageEngine } from "./cloud-image";
+import { CloudSafetyError, isCloudSafetyReject } from "./cloud-router";
 import { assertSpendAllowed } from "./spend-cap";
 import { comfyTxt2Img } from "./comfy";
 import { imageEngine } from "./engines";
@@ -16,15 +15,25 @@ export async function generateStill(
   opts?: GenerateStillOpts,
 ) {
   let engine = engineId || imageEngine().id;
-  prompt = withRealismPrompt(prompt);
   const refs = normalizeStillRefs(reference);
-  if (engine === "klein-qwen") {
-    return generateKleinQwen(prompt, refs, opts);
+  if (engine !== "grok-imagine-tryon" && engine !== "kling-image-omni" && engine !== "kolors-virtual-try-on" && engine !== "reactor") {
+    prompt = withRealismPrompt(prompt, "", { multi: Boolean(refs.extra?.length) });
   }
   const hasRef = Boolean(refs.face || refs.body || refs.scene);
   // Qwen Image Edit is instruction-edit only. Prompt-only stays on Z-Image.
-  if (engine === "qwen-image-edit" && !hasRef) {
-    engine = "z-image-turbo";
+  if (engine === "qwen-image-2.1" || engine === "z-image-turbo") {
+    engine = "qwen-image-2.1";
+  }
+  // Klein / Z-Image only consume one still (the face). They keep that photo's clothes
+  // and ignore a SKU ref. On-model with a product photo must go through Qwen.
+  if (
+    opts?.kind === "on-model" &&
+    refs.face &&
+    refs.body &&
+    refs.body !== refs.face &&
+    (engine === "flux2-klein-4b" || engine === "flux2-klein-base-9b")
+  ) {
+    engine = "qwen-image-2.1";
   }
   const route = resolveRoute(engine, "auto");
   if (isCloudImageEngine(engine)) {
@@ -37,9 +46,44 @@ export async function generateStill(
       return { buffer, provider: route?.provider || "unknown" };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes("Switch to a local model") || /safety_violations|safety system/i.test(msg)) {
+      if (
+        (engine === "marketing-studio-image" || engine.startsWith("seedance") || engine === "kling-3-0-std") &&
+        /401|Invalid credentials|upload URL failed/i.test(msg) &&
+        hasRef
+      ) {
+        const local = await comfyTxt2Img(prompt, refs, "qwen-image-2.1", opts);
+        return { ...local, provider: "comfy" as const };
+      }
+      if (
+        engine === "marketing-studio-image" &&
+        (err instanceof CloudSafetyError || isCloudSafetyReject(msg) || /\bnsfw\b/i.test(msg))
+      ) {
+        if (hasXaiProvider()) {
+          const buffer = await cloudTxt2Img("grok-imagine", prompt, refs, opts);
+          return { buffer, provider: "xai" };
+        }
+        if (hasRef) {
+          const local = await comfyTxt2Img(prompt, refs, "qwen-image-2.1", opts);
+          return { ...local, provider: "comfy" as const };
+        }
+        throw new Error("Higgsfield blocked NSFW. Pick Grok Imagine (18+) or Qwen Image Edit (local).");
+      }
+      if (
+        engine === "grok-imagine" &&
+        /content moderation|moderated/i.test(msg) &&
+        hasRef
+      ) {
+        const local = await comfyTxt2Img(prompt, refs, "qwen-image-2.1", opts);
+        return { ...local, provider: "comfy" as const };
+      }
+      if (engine.startsWith("gpt-image") && (msg.includes("Switch to a local model") || /safety_violations|safety system/i.test(msg))) {
         throw new Error(
-          "GPT Image blocked this (safety filter). Your written scene can be fine — GPT also flags the word “nude” in lock text, and often swimwear/lingerie. Use Qwen Image Edit, Klein, or Z-Image locally. Comfy does not use that filter.",
+          "GPT Image blocked this (safety filter). Pick Grok Imagine (18+) or Qwen Image Edit (local).",
+        );
+      }
+      if (/Duplicate parameter: 'image'/i.test(msg)) {
+        throw new Error(
+          "GPT Flare rejected character + SKU as two photos. Pick Qwen Image Edit for on-model, or GPT 2.5 Sunburst.",
         );
       }
       if (/copyright/i.test(msg)) {
@@ -61,35 +105,5 @@ export async function generateStill(
       );
     }
     throw err;
-  }
-}
-
-async function generateKleinQwen(prompt: string, refs: StillRefs, opts?: GenerateStillOpts) {
-  const face = refs.face;
-  if (!face || !fs.existsSync(face)) {
-    throw new Error("Klein+Qwen needs an identity plate. Lock a face first.");
-  }
-  const vibe = withRealismPrompt(opts?.vibePrompt?.trim() || prompt);
-  opts?.onProgress?.("1/2 Klein");
-  const klein = await comfyTxt2Img(vibe, undefined, "flux2-klein-4b", {
-    width: opts?.width ?? 768,
-    height: opts?.height ?? 1024,
-    aspect: opts?.aspect,
-  });
-  const tmp = path.join(os.tmpdir(), `creatoros-klein-qwen-${Date.now()}.png`);
-  fs.writeFileSync(tmp, klein.buffer);
-  try {
-    opts?.onProgress?.("2/2 Qwen");
-    const swap =
-      "Image 1 is the pose, crop, clothing, lighting, and scene to keep. Image 2 is the FACE lock. The person in image 1 must become the locked identity: same face, same skin, same hair, same age. Keep only pose, camera, wardrobe, lighting, and scene from image 1. Photoreal.";
-    const qwen = await comfyTxt2Img(
-      swap,
-      { face, body: refs.body, scene: tmp },
-      "qwen-image-edit",
-      { kind: "faceswap", width: opts?.width ?? 768, height: opts?.height ?? 1024, aspect: opts?.aspect },
-    );
-    return { ...qwen, provider: "comfy" as const };
-  } finally {
-    fs.unlink(tmp, () => undefined);
   }
 }

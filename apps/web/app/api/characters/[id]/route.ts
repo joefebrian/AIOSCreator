@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runEdit, runIdentity, runSlot, runUpscale, runVideoSet } from "@/lib/character-jobs";
 import { deleteCharacter, deleteCharacterMedia, getCharacter, toggleInspiration, updateCharacter } from "@/lib/characters";
+import { cleanMarkets } from "@/lib/markets";
 import { isCloudImageEngine } from "@/lib/cloud-image";
 import { imageEngine } from "@/lib/engines";
 import { characterLook, revampOperatorPrompt } from "@/lib/look-lock";
@@ -68,11 +69,13 @@ export async function PATCH(req: Request, ctx: Ctx) {
     name?: string;
     sourcePrompt?: string;
     visibility?: "private" | "public";
+    markets?: unknown;
   };
-  const patch: { name?: string; sourcePrompt?: string; visibility?: "private" | "public" } = {};
+  const patch: { name?: string; sourcePrompt?: string; visibility?: "private" | "public"; markets?: ReturnType<typeof cleanMarkets> } = {};
   if (typeof body.name === "string") patch.name = body.name.trim() || "Untitled character";
   if (typeof body.sourcePrompt === "string") patch.sourcePrompt = body.sourcePrompt;
   if (body.visibility === "private" || body.visibility === "public") patch.visibility = body.visibility;
+  if ("markets" in body) patch.markets = cleanMarkets(body.markets);
   const row = updateCharacter(id, patch);
   if (!row) return NextResponse.json({ error: "not found" }, { status: 404 });
   return NextResponse.json(row);

@@ -6,7 +6,7 @@ Research → Create → Animate → Publish → Engage → Measure → Monetize 
 
 The moat is not the model. The moat is **Product + Character + Creative DNA + Distribution + Attribution**.
 
-[github.com/joefebrian/AIOSCreator](https://github.com/joefebrian/AIOSCreator)
+[github.com/joefebrian/AIOSCreator](https://github.com/joefebrian/AIOSCreator) · [Buy me a coffee](https://www.buymeacoffee.com/P2PLabs)
 
 ---
 
@@ -187,7 +187,7 @@ Copy `.env.example` → `apps/web/.env.local`. **Never commit `.env.local`.**
 
 Prefer **System → Settings** for live keys. Env is fallback.
 
-`.gitignore` excludes `.env`, `.env.*` (except `.env.example`), `data/db/`, `data/media/`, `data/tmp*`.
+`.gitignore` excludes `.env`, `.env.*` (except `.env.example`), `data/db/`, `data/media/`, `data/tmp*`, `data/train/`.
 
 ---
 
@@ -229,6 +229,10 @@ H3 I2V turbo on 12GB: **576×1024**, 6 steps. Native 20-step can stay 640×1152.
 6. Commercial stills should use license-safe checkpoints (Klein 4B / Qwen / Wan Apache where applicable). Klein Base 9B is research / non-commercial.
 
 ---
+
+## Support
+
+If this workstation helps, [buy P2P Labs a coffee](https://www.buymeacoffee.com/P2PLabs).
 
 ## License and company
 

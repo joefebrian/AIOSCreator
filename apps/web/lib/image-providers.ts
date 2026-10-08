@@ -5,7 +5,21 @@ import { upsertApiProvider, type ApiProviderId } from "./api-providers";
 import { resolveRoute, type ViaId } from "./model-routes";
 import { dataRoot, ensureDataDirs } from "./paths";
 
-export type ImageEngineId = "gpt-image-2.5" | "gpt-image-2" | "seedream-5-pro" | "seedream-4-5" | "nano-banana";
+export type ImageEngineId =
+  | "gpt-image-2.5"
+  | "gpt-image-2.5-flare"
+  | "gpt-image-2"
+  | "seedream-5-pro"
+  | "seedream-5-lite"
+  | "seedream-4-5"
+  | "muse-image-1.0"
+  | "qwen-image-3.0"
+  | "nano-banana"
+  | "grok-imagine"
+  | "grok-imagine-tryon"
+  | "kling-image-omni"
+  | "kolors-virtual-try-on"
+  | "marketing-studio-image";
 
 export type ImageProvider = {
   id: string;
@@ -34,6 +48,13 @@ export const IMAGE_PRESETS: {
     hint: "Character complete set. Official key Character_Generation. Precision, hands/feet.",
   },
   {
+    id: "gpt-image-2.5-flare",
+    name: "OpenAI · GPT Image 2.5 Flare",
+    baseURL: "https://api.openai.com/v1",
+    model: "gpt-image-2.5-flare",
+    hint: "Everyday UGC / product stills. Same OpenAI key. Quality medium — faster, cheaper than Sunburst.",
+  },
+  {
     id: "gpt-image-2",
     name: "OpenAI · GPT Image 2",
     baseURL: "https://api.openai.com/v1",
@@ -42,36 +63,87 @@ export const IMAGE_PRESETS: {
   },
   {
     id: "seedream-5-pro",
-    name: "BytePlus · Seedream 5.0 Pro",
+    name: "BytePlus · Seedream 5.0",
     baseURL: "https://ark.ap-southeast.bytepluses.com/api/v3",
-    model: "seedream-5-0-pro",
-    hint: "Official Ark API, or CometAPI if Seedance key exists. Multi-reference stills.",
+    model: "dola-seedream-5-0-pro-260628",
+    hint: "ModelArk ap-southeast-1. Precision stills. Same ARK key as Lite/4.5.",
+  },
+  {
+    id: "seedream-5-lite",
+    name: "BytePlus · Seedream 5.0 Lite",
+    baseURL: "https://ark.ap-southeast.bytepluses.com/api/v3",
+    model: "seedream-5-0-lite-260128",
+    hint: "Faster 5.0. 2K/3K. Same BytePlus ARK key.",
   },
   {
     id: "seedream-4-5",
-    name: "HensunAI · Seedream 4.5",
-    baseURL: "https://hensunai.com",
-    model: "ByteDance-Seedream-4.5",
-    hint: "NewAPI on hensunai.com. ByteDance-Seedream-4.5 stills.",
+    name: "BytePlus · Seedream 4.5",
+    baseURL: "https://ark.ap-southeast.bytepluses.com/api/v3",
+    model: "seedream-4-5-251128",
+    hint: "2K/4K. Same BytePlus ARK key.",
+  },
+  {
+    id: "muse-image-1.0",
+    name: "Meta · Muse Image 1.0",
+    baseURL: "https://api.meta.ai/v1",
+    model: "muse-image-1.0",
+    hint: "OpenAI-compatible images API. Generate + multi-ref edit. $0.01/image.",
+  },
+  {
+    id: "qwen-image-3.0",
+    name: "Alibaba · Qwen Image 3.0 Pro",
+    baseURL: "https://dashscope-intl.aliyuncs.com/api/v1",
+    model: "qwen-image-3.0-pro",
+    hint: "Singapore DashScope multimodal. Same Qwen LLM key, not Wan video. 1–3 refs. ~$0.04/1K.",
   },
   {
     id: "nano-banana",
-    name: "Comet · Nano Banana",
-    baseURL: "https://api.cometapi.com",
+    name: "Nano Banana · Gemini",
+    baseURL: "",
     model: "gemini-2.5-flash-image",
-    hint: "Google Gemini Flash Image via Comet. Same key as Seedance.",
+    hint: "Was Comet-only. Pipe removed — no remaining provider.",
+  },
+  {
+    id: "grok-imagine",
+    name: "xAI · Grok Imagine 2.0",
+    baseURL: "https://api.x.ai/v1",
+    model: "grok-imagine-image-2.0",
+    hint: "Adult 18+ stills. XAI_API_KEY. Not the LLM key.",
+  },
+  {
+    id: "grok-imagine-tryon",
+    name: "xAI · Grok Imagine try-on",
+    baseURL: "https://api.x.ai/v1",
+    model: "grok-imagine-image-quality",
+    hint: "Virtual try-on. Same xAI Imagine key. Person + garment. 2K quality.",
+  },
+  {
+    id: "kling-image-omni",
+    name: "Kling · Image 3.0 Omni",
+    baseURL: "https://api-singapore.klingai.com",
+    model: "kling-v3-omni",
+    hint: "Same Kling key as Motion Control. Person + SKU via omni-image. Kolors try-on retired.",
+  },
+  {
+    id: "kolors-virtual-try-on",
+    name: "Kling · Kolors try-on v1.5",
+    baseURL: "https://api-singapore.klingai.com",
+    model: "kolors-virtual-try-on-v1-5",
+    hint: "Retired 2026-09-15. Use Kling Image Omni.",
+  },
+  {
+    id: "marketing-studio-image",
+    name: "Higgsfield · Marketing Studio Image",
+    baseURL: "https://api.higgsfield.ai",
+    model: "marketing-studio/image",
+    hint: "Campaign stills. Product + optional model refs. ~$0.006/image.",
   },
 ];
 
 function fromRoute(engineId: ImageEngineId, via?: ViaId): ImageProvider | undefined {
   const hit = resolveRoute(engineId, via ?? "auto");
   if (!hit || hit.provider === "comfy" || !hit.apiKey) return undefined;
-  const baseURL =
-    hit.provider === "comet" && engineId === "nano-banana"
-      ? "https://api.cometapi.com"
-      : hit.provider === "comet"
-        ? "https://api.cometapi.com/v1"
-        : hit.baseURL;
+  const baseURL = hit.baseURL;
   return {
     id: hit.provider,
     engineId,
@@ -163,14 +235,20 @@ export function addImageProvider(input: {
 
 function inferApiProvider(engineId: ImageEngineId, baseURL: string): ApiProviderId {
   const u = baseURL.toLowerCase();
-  if (u.includes("cometapi")) return "comet";
+  if (u.includes("meta.ai")) return "meta";
   if (u.includes("openai.com")) return "openai";
+  if (u.includes("x.ai") || u.includes("xai")) return "xai";
   if (u.includes("byteplus") || u.includes("volces") || u.includes("ark.")) return "byteplus";
   if (u.includes("wavespeed")) return "wavespeed";
-  if (u.includes("hensunai")) return "hensun";
-  if (engineId === "seedream-4-5") return "hensun";
-  if (engineId === "nano-banana") return "comet";
-  if (engineId === "gpt-image-2" || engineId === "gpt-image-2.5") return "openai";
+
+  if (engineId === "nano-banana") throw new Error("Nano Banana has no remaining provider (Comet removed).");
+  if (engineId === "gpt-image-2" || engineId === "gpt-image-2.5" || engineId === "gpt-image-2.5-flare") return "openai";
+  if (engineId === "grok-imagine" || engineId === "grok-imagine-tryon") return "xai";
+  if (engineId === "kolors-virtual-try-on" || engineId === "kling-image-omni") return "kling";
+  if (engineId === "marketing-studio-image") return "higgsfield";
+  if (engineId === "muse-image-1.0") return "meta";
+  if (engineId === "qwen-image-3.0") return "dashscope";
+  if (engineId === "seedream-5-pro" || engineId === "seedream-5-lite" || engineId === "seedream-4-5") return "byteplus";
   return "byteplus";
 }
 

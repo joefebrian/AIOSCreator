@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { studioImagePrompt, studioVideoPrompt } from "@/lib/character-prompts";
 import { llmClient, llmConfig, llmModel } from "@/lib/llm";
 import { SpendCapError } from "@/lib/spend-cap";
 import { assertSpendAllowed } from "@/lib/spend-cap";
@@ -29,9 +30,10 @@ export async function POST(req: Request) {
           role: "system",
           content:
             kind === "image"
-              ? `Write ONE photoreal 9:16 fashion-editorial still prompt. Return plain text only.
+              ? `Write ONE photoreal 9:16 on-model still prompt. Return plain text only.
 Lead: ${character}. Product: ${product || "none"}. Scene: ${scene}.
-Rules: unretouched skin (pores, no glass skin), product readable if present, knees-up or 3/4, closed-mouth, one person. No watermark.`
+If a product is set, the character MUST wear that exact garment (same color, cut, fabric, logos). Do not invent a different outfit.
+Rules: unretouched skin (pores, no glass skin), product fully visible, knees-up or 3/4, closed-mouth, one person. No watermark.`
               : `Write a motion-only I2V prompt for a 5–8s 9:16 clip. Return plain text only.
 Lead: ${character}. Product: ${product || "none"}. Scene: ${scene}.
 CAMERA: locked-off static, product stays in frame.
@@ -50,8 +52,9 @@ Small editorial motion (breath, glance, hand on garment). No walking off, no ide
   } catch (err) {
     const fallback =
       kind === "video"
-        ? `CAMERA: locked-off static, 9:16. Same person as the still. 0-2s small inhale, engage camera. 2-4s half-step or head tilt, product readable. 4-6s settle. No new identity.`
-        : `Unretouched photoreal 9:16 of ${character}${product ? ` wearing/holding ${product}` : ""} in ${scene}. Pores, no glass skin, closed mouth, one person.`;
+        ? studioVideoPrompt({ character, product, scene, aspect: "9:16", durationSec: 6 })
+        : studioImagePrompt({ character, product, place: scene }) ||
+          `Unretouched photoreal 9:16 of ${character}${product ? ` wearing the exact ${product}` : ""} in ${scene}. Pores, no glass skin, closed mouth, one person.`;
     if (err instanceof SpendCapError) return NextResponse.json({ error: err.message, prompt: fallback }, { status: 402 });
     return NextResponse.json({ prompt: fallback });
   }

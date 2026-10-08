@@ -16,7 +16,7 @@ export function DropSlot({
   hint: string;
   value: string;
   onChange: (url: string) => void;
-  frame?: "portrait" | "wide";
+  frame?: "portrait" | "wide" | "band";
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -61,7 +61,7 @@ export function DropSlot({
         }}
         className={cn(
           "relative flex w-full flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed transition-colors disabled:opacity-60",
-          frame === "wide" ? "aspect-video" : "aspect-[3/4]",
+          frame === "wide" ? "aspect-video" : frame === "band" ? "h-36" : "aspect-[3/4]",
           over ? "border-[#652DFF] bg-[#652DFF]/5" : "border-[#E6E8EE] bg-[#F3F4F8]",
         )}
       >
@@ -69,7 +69,7 @@ export function DropSlot({
           kind === "video" ? (
             <video
               src={value}
-              className="absolute inset-0 h-full w-full object-cover"
+              className="absolute inset-0 h-full w-full object-contain"
               muted
               playsInline
               autoPlay
@@ -78,7 +78,7 @@ export function DropSlot({
             />
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={value} alt="" className="absolute inset-0 h-full w-full object-cover" />
+            <img src={value} alt="" className="absolute inset-0 h-full w-full object-contain" />
           )
         ) : (
           <>

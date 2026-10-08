@@ -70,12 +70,25 @@ type Usage = {
 type MapRow = { model: string; routes: { id: string; name: string; ready: boolean; wired?: boolean; keyed?: boolean }[] };
 
 const MODEL_LABEL: Record<string, string> = {
-  "gpt-image-2.5": "GPT Image 2.5",
+  "gpt-image-2.5": "GPT Image 2.5 Sunburst",
+  "gpt-image-2.5-flare": "GPT Image 2.5 Flare",
+  "grok-imagine": "Grok Imagine 2.0",
+  "grok-imagine-tryon": "Grok Imagine try-on",
+  "kling-image-omni": "Kling Image Omni",
+  "kolors-virtual-try-on": "Kolors try-on v1.5",
+  "grok-imagine-video": "Grok Imagine Video 1.5",
   "gpt-image-2": "GPT Image 2",
-  "seedream-5-pro": "Seedream 5 Pro",
+  "seedream-5-pro": "Seedream 5.0",
+  "seedream-5-lite": "Seedream 5.0 Lite",
+  "seedream-4-5": "Seedream 4.5",
+  "muse-image-1.0": "Muse Image 1.0",
+  "qwen-image-3.0": "Qwen Image 3.0 Pro",
   "seedream-4-5": "Seedream 4.5",
   "nano-banana": "Nano Banana",
-  "seedance-2-5": "Seedance 2.5",
+  "seedance-2-5": "Seedance 2.5 I2V",
+  "seedance-2-5-extend": "Seedance 2.5 Extend",
+  "kling-3-0-std": "Kling 3.0 Standard I2V",
+  "marketing-studio-image": "Marketing Studio Image",
   "seedance-2-0": "Seedance 2.0",
   "kling-2-6": "Kling 2.6",
   "kling-3-0": "Kling 3.0",
@@ -85,13 +98,15 @@ const MODEL_LABEL: Record<string, string> = {
 };
 
 const PIPE_HINT: Record<string, string> = {
-  comet: "GPT Image, Seedream, Nano Banana, Seedance. Dashboard key starts with sk-.",
   openai: "Official GPT Image 2.",
-  byteplus: "Official Seedream 5 Pro. Seedance on this pipe is not wired.",
+  meta: "Meta Muse Image 1.0. Bearer key from dev.meta.ai. $0.01/image.",
+  xai: "Grok Imagine stills + video. XAI_API_KEY. Adult 18+ UGC. Not the LLM key.",
+  higgsfield: "Higgsfield. Seedance 2.5 + Marketing Studio Image + Kling 3.0 Standard I2V. Key ID + secret.",
+  byteplus: "BytePlus ModelArk ap-southeast-1. Seedream 5.0 / 5.0 Lite / 4.5. ARK API key.",
   kling: "Official Kling Motion Control 3.0.",
   wavespeed: "Listed, not wired yet.",
-  hensun: "NewAPI. Seedream 4.5, Seedance 2.0, Seedance 2.5. URL hensunai.com.",
-  dashscope: "Alibaba Singapore. Two accounts: Qwen LLM (compatible-mode) vs Wan 3.0 video (/api/v1). Don't mix keys.",
+
+  dashscope: "Alibaba Singapore. Qwen LLM + Qwen Image 3.0 use compatible-mode. Wan 3.0 video is a separate key/host. Don't mix.",
 };
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -121,8 +136,8 @@ export default function SettingsPage() {
   const [pipes, setPipes] = useState<Pipe[]>([]);
   const [accounts, setAccounts] = useState<AccountRow[]>([]);
   const [modelMap, setModelMap] = useState<MapRow[]>([]);
-  const [pipeId, setPipeId] = useState("comet");
-  const [pipeBase, setPipeBase] = useState("https://api.cometapi.com");
+  const [pipeId, setPipeId] = useState("higgsfield");
+  const [pipeBase, setPipeBase] = useState("https://api.higgsfield.ai");
   const [pipeKey, setPipeKey] = useState("");
   const [pipeLabel, setPipeLabel] = useState("");
   const [pipeTier, setPipeTier] = useState("gratis");
@@ -559,9 +574,6 @@ export default function SettingsPage() {
               <h2 className="mt-1 text-sm font-bold">Stills & motion</h2>
             </div>
             <div className="flex gap-2">
-              <Btn type="button" variant="ghost" disabled={busy} onClick={() => void postPipe({ action: "quota" })}>
-                Refresh $
-              </Btn>
               <Pill tone={liveCloud ? "ready" : "muted"}>{liveCloud ? `${liveCloud} live` : "No keys"}</Pill>
             </div>
           </div>
@@ -633,7 +645,7 @@ export default function SettingsPage() {
                 <input
                   value={pipeEmail}
                   onChange={(e) => setPipeEmail(e.target.value)}
-                  placeholder="you+comet3@gmail.com"
+                  placeholder="you@studio.com"
                   className={inputClass}
                 />
               </Field>

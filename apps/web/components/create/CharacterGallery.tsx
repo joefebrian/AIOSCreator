@@ -34,6 +34,31 @@ export type GalleryItem = {
   upscaled: boolean;
 };
 
+type PublishLogin = {
+  id: string;
+  platform: string;
+  accountName: string;
+  handle?: string;
+  hasToken: boolean;
+  status?: string;
+};
+
+const PLATFORM_LABEL: Record<string, string> = {
+  pinterest: "Pinterest",
+  youtube: "YouTube",
+  tiktok: "TikTok",
+  instagram: "Instagram",
+  threads: "Threads",
+  x: "X",
+};
+
+function publishMode(platform: string, hasToken: boolean, video: boolean) {
+  if (platform === "tiktok") return "inbox";
+  if ((platform === "youtube" && !video) || (platform === "pinterest" && video)) return "export";
+  if (platform === "instagram" || platform === "threads") return "export";
+  return hasToken ? "direct" : "export";
+}
+
 type Board = "generation" | "inspiration";
 type Tab = "image" | "video" | "4k-image" | "4k-video";
 
@@ -97,6 +122,20 @@ export function CharacterGallery({
   }, [focusKind]);
   const [preview, setPreview] = useState<GalleryItem | null>(null);
   const [copied, setCopied] = useState(false);
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [logins, setLogins] = useState<PublishLogin[]>([]);
+  const [platform, setPlatform] = useState("pinterest");
+  const [accountId, setAccountId] = useState("");
+  const [when, setWhen] = useState("");
+  const [caption, setCaption] = useState("");
+  const [boards, setBoards] = useState<{ id: string; name: string }[]>([]);
+  const [boardId, setBoardId] = useState("");
+  const [boardsNote, setBoardsNote] = useState("");
+  const [approve, setApprove] = useState(false);
+  const [publishBusy, setPublishBusy] = useState(false);
+  const [captionBusy, setCaptionBusy] = useState(false);
+  const [publishNote, setPublishNote] = useState("");
+  const [publishError, setPublishError] = useState("");
 
   const pins = sharedInspiration ?? character.inspiration ?? [];
   const pinnedUrls = useMemo(() => new Set(pins.map((p) => p.url)), [pins]);
@@ -124,6 +163,34 @@ export function CharacterGallery({
   };
 
   useEffect(() => {
+    if (!publishOpen || logins.length) return;
+    let stop = false;
+    void fetch("/api/distribute/accounts")
+      .then((r) => r.json())
+      .then((json) => {
+        if (stop) return;
+        const rows = ((json.accounts || []) as PublishLogin[]).filter((a) => a.status !== "paused");
+        setLogins(rows);
+        const pin = rows.find((a) => a.platform === "pinterest" && a.hasToken) || rows.find((a) => a.hasToken) || rows[0];
+        if (pin) {
+          setPlatform(pin.platform);
+          setAccountId(pin.id);
+        }
+      })
+      .catch(() => {
+        if (!stop) setPublishError("Could not load logins.");
+      });
+    return () => {
+      stop = true;
+    };
+  }, [publishOpen, logins.length]);
+
+  useEffect(() => {
+    setPublishNote("");
+    setPublishError("");
+  }, [preview?.id]);
+
+  useEffect(() => {
     if (!preview) return;
     setCopied(false);
     const onKey = (e: KeyboardEvent) => {
@@ -132,6 +199,114 @@ export function CharacterGallery({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [preview]);
+
+  const platformLogins = logins.filter((a) => a.platform === platform);
+  const login = platformLogins.find((a) => a.id === accountId) || platformLogins[0];
+  const platforms = [...new Set(logins.map((a) => a.platform))];
+
+  useEffect(() => {
+    if (!publishOpen || platform !== "pinterest" || !login?.hasToken || preview?.kind === "video") {
+      setBoards([]);
+      setBoardId("");
+      setBoardsNote("");
+      return;
+    }
+    let stop = false;
+    setBoardsNote("");
+    void fetch(`/api/distribute/boards?accountId=${encodeURIComponent(login.id)}`)
+      .then((r) => r.json())
+      .then((json) => {
+        if (stop) return;
+        const rows = ((json.boards || []) as { id: string; name: string }[]).filter((b) => b.id && b.name);
+        setBoards(rows);
+        setBoardId((cur) => (rows.some((b) => b.id === cur) ? cur : rows[0]?.id || ""));
+        if (json.error) setBoardsNote(json.error);
+        else if (!rows.length) setBoardsNote("This login has no board yet.");
+      })
+      .catch(() => {
+        if (!stop) setBoardsNote("Could not load boards.");
+      });
+    return () => {
+      stop = true;
+    };
+  }, [publishOpen, platform, login?.id, login?.hasToken, preview?.kind]);
+
+  function pickPlatform(next: string) {
+    setPlatform(next);
+    const rows = logins.filter((a) => a.platform === next);
+    const chosen = rows.find((a) => a.hasToken) || rows[0];
+    setAccountId(chosen?.id || "");
+    setPublishNote("");
+    setPublishError("");
+  }
+
+  async function addToPublish() {
+    if (!preview || !login) return;
+    const mediaUrl = tabFile(preview, tab);
+    const video = preview.kind === "video";
+    setPublishBusy(true);
+    setPublishError("");
+    setPublishNote("");
+    try {
+      const res = await fetch("/api/distribute/posts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accountIds: [login.id],
+          characterId: character.id,
+          mediaUrl,
+          mediaType: video ? "video" : "image",
+          caption: caption.trim(),
+          boardId: login.platform === "pinterest" && !video ? boardId : undefined,
+          mode: publishMode(login.platform, login.hasToken, video),
+          approval: approve ? "approved" : "pending",
+          scheduledAt: when ? new Date(when).toISOString() : undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not add");
+      const id = json.post?.id || json.posts?.[0]?.id || "";
+      setPublishNote(id ? `Saved. Open Publish to review.` : "Saved.");
+      setCaption("");
+    } catch (err) {
+      setPublishError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPublishBusy(false);
+    }
+  }
+
+  async function revampCaption() {
+    if (!preview) return;
+    const draft = caption.trim();
+    const prompt = preview.prompt?.trim() || "";
+    if (!draft && !prompt) {
+      setPublishError("Write a caption, or open a still that has a prompt.");
+      return;
+    }
+    setCaptionBusy(true);
+    setPublishError("");
+    setPublishNote("");
+    try {
+      const res = await fetch("/api/distribute/caption", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          platform,
+          characterName: character.name,
+          caption: draft,
+          prompt,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not revamp");
+      if (!json.caption) throw new Error("Empty caption");
+      setCaption(json.caption);
+    } catch (err) {
+      setPublishError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCaptionBusy(false);
+    }
+  }
 
   async function copyPrompt() {
     const text = preview?.prompt?.trim();
@@ -245,7 +420,7 @@ export function CharacterGallery({
                     download
                     title="Download original"
                     onClick={(e) => e.stopPropagation()}
-                    className={iconClass()}
+                    className={downloadClass()}
                   >
                     <DownloadGlyph />
                   </a>
@@ -358,9 +533,129 @@ export function CharacterGallery({
                       <FourKGlyph />
                     </IconBtn>
                   ) : null}
-                  <a href={originalSrc(tabFile(preview, tab), true)} download title="Download original" className={iconClass()}>
+                  <a href={originalSrc(tabFile(preview, tab), true)} download title="Download original" className={downloadClass()}>
                     <DownloadGlyph />
                   </a>
+                </div>
+                <div className="mt-4 border-t border-[#E6E8EE] pt-3">
+                  <button
+                    type="button"
+                    className="text-[12px] font-semibold text-[#111827]"
+                    onClick={() => setPublishOpen((open) => !open)}
+                  >
+                    Add to publish
+                  </button>
+                  {publishOpen ? (
+                    <div className="mt-2 space-y-2">
+                      {platforms.length ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {platforms.map((id) => (
+                            <button
+                              key={id}
+                              type="button"
+                              onClick={() => pickPlatform(id)}
+                              className={cn(
+                                "rounded-full px-2.5 py-1 text-[11px] font-semibold",
+                                platform === id ? "bg-[#111827] text-white" : "bg-[#F3F4F8] text-[#374151]",
+                              )}
+                            >
+                              {PLATFORM_LABEL[id] || id}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[12px] text-[#6B7280]">Connect a login on Distribute → Accounts.</p>
+                      )}
+                      {platformLogins.length > 1 ? (
+                        <select
+                          value={login?.id || ""}
+                          onChange={(e) => setAccountId(e.target.value)}
+                          className="w-full rounded-lg border border-[#E5E7EB] px-2 py-1.5 text-[12px]"
+                        >
+                          {platformLogins.map((a) => (
+                            <option key={a.id} value={a.id}>
+                              {a.handle ? `@${a.handle.replace(/^@/, "")}` : a.accountName}
+                              {a.hasToken ? "" : " · not connected"}
+                            </option>
+                          ))}
+                        </select>
+                      ) : login ? (
+                        <p className="text-[12px] text-[#6B7280]">
+                          {login.handle ? `@${login.handle.replace(/^@/, "")}` : login.accountName}
+                          {login.hasToken ? "" : " · not connected"}
+                        </p>
+                      ) : null}
+                      {platform === "pinterest" && preview.kind !== "video" && login?.hasToken ? (
+                        <label className="block text-[11px] font-semibold text-[#6B7280]">
+                          Board
+                          <select
+                            value={boardId}
+                            onChange={(e) => setBoardId(e.target.value)}
+                            className="mt-1 w-full rounded-lg border border-[#E5E7EB] px-2 py-1.5 text-[12px] font-normal text-[#111827]"
+                          >
+                            {boards.length === 0 ? <option value="">No board yet</option> : null}
+                            {boards.map((board) => (
+                              <option key={board.id} value={board.id}>
+                                {board.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : null}
+                      {boardsNote ? <p className="text-[12px] text-[#B91C1C]">{boardsNote}</p> : null}
+                      <label className="block text-[11px] font-semibold text-[#6B7280]">
+                        When
+                        <input
+                          type="datetime-local"
+                          value={when}
+                          onChange={(e) => setWhen(e.target.value)}
+                          className="mt-1 w-full rounded-lg border border-[#E5E7EB] px-2 py-1.5 text-[12px] font-normal text-[#111827]"
+                        />
+                      </label>
+                      <label className="block text-[11px] font-semibold text-[#6B7280]">
+                        Caption
+                        <textarea
+                          value={caption}
+                          onChange={(e) => setCaption(e.target.value)}
+                          placeholder="Caption"
+                          rows={3}
+                          className="mt-1 w-full resize-y rounded-lg border border-[#E5E7EB] px-2 py-1.5 text-[12px] font-normal text-[#111827]"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        disabled={captionBusy || publishBusy || (!caption.trim() && !preview.prompt?.trim())}
+                        onClick={() => void revampCaption()}
+                        className="rounded-lg bg-[#F3F4F8] px-2.5 py-1.5 text-[11px] font-semibold text-[#111827] disabled:opacity-40"
+                      >
+                        {captionBusy ? "Revamping…" : "Revamp script"}
+                      </button>
+                      <label className="flex items-center gap-2 text-[12px] text-[#374151]">
+                        <input type="checkbox" checked={approve} onChange={(e) => setApprove(e.target.checked)} />
+                        Approve so it posts at that time
+                      </label>
+                      <button
+                        type="button"
+                        disabled={!login || publishBusy || captionBusy || (login.platform === "pinterest" && preview.kind !== "video" && login.hasToken && !boardId)}
+                        onClick={() => void addToPublish()}
+                        className="rounded-lg bg-[#111827] px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40"
+                      >
+                        {publishBusy ? "Saving…" : "Add to publish"}
+                      </button>
+                      <p className="text-[11px] leading-4 text-[#6B7280]">
+                        AI marks come off the copy that uploads. This library file stays. Leave When empty for a draft. The clock runs while Calendar is open, or use Publish due now.
+                      </p>
+                      {publishNote ? (
+                        <p className="text-[12px] text-[#111827]">
+                          {publishNote}{" "}
+                          <a className="font-semibold text-[#652DFF]" href="/distribute/queue">
+                            Publish
+                          </a>
+                        </p>
+                      ) : null}
+                      {publishError ? <p className="text-[12px] text-[#B91C1C]">{publishError}</p> : null}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -390,6 +685,10 @@ function tabFile(item: GalleryItem, tab: Tab) {
 
 function iconClass() {
   return "flex h-7 w-7 items-center justify-center rounded-md bg-black/70 text-white hover:bg-black";
+}
+
+function downloadClass() {
+  return "flex h-7 w-7 items-center justify-center rounded-md bg-white text-[#111827] ring-1 ring-[#E6E8EE] hover:bg-[#F3F4F8]";
 }
 
 function IconBtn({
@@ -537,7 +836,7 @@ function buildItems(character: Character, jobs: GalleryJob[], engineNames: Recor
       id: `edit-${e.id}`,
       url: e.url,
       url4k: e.url4k,
-      label: e.mode === "product" ? "On-model" : e.mode === "face-swap" ? "Pose lock" : e.mode === "chat" ? "Generate" : e.mode,
+      label: e.mode === "product" ? "On-model" : e.mode === "face-swap" ? "Face swap" : e.mode === "chat" ? "Generate" : e.mode,
       prompt: e.prompt,
       jobId: e.jobId,
       slot: e.id,
@@ -555,12 +854,27 @@ function buildItems(character: Character, jobs: GalleryJob[], engineNames: Recor
     if (isProductMediaUrl(job.mediaUrl)) continue;
     if (used.has(job.mediaUrl)) continue;
     const isVideo = job.kind === "motion" || /\.mp4($|\?)/i.test(job.mediaUrl);
-    if (!isVideo && job.kind !== "motion") continue;
+    if (isVideo) {
+      out.push({
+        id: job.id,
+        kind: "video",
+        url: job.mediaUrl,
+        label: "Video",
+        prompt: jobPrompt(job.input),
+        model: job.model,
+        modelName: displayModel(job.model, engineNames),
+        provider: job.provider,
+        createdAt: job.createdAt,
+        upscaled: Boolean(job.upscaled),
+      });
+      used.add(job.mediaUrl);
+      continue;
+    }
     out.push({
       id: job.id,
-      kind: "video",
+      kind: "image",
       url: job.mediaUrl,
-      label: "Video",
+      label: job.model || "Generate",
       prompt: jobPrompt(job.input),
       model: job.model,
       modelName: displayModel(job.model, engineNames),

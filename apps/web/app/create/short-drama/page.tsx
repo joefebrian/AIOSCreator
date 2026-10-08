@@ -168,6 +168,7 @@ export default function ShortDramaPage() {
     setBusy(`video-${shot.id}`);
     setError("");
     try {
+      const prevVideo = open.shots.filter((s) => s.index < shot.index && s.videoUrl).sort((a, b) => b.index - a.index)[0]?.videoUrl;
       const res = await fetch("/api/jobs/motion", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -175,7 +176,8 @@ export default function ShortDramaPage() {
           imageUrl: shot.stillUrl,
           prompt: shot.videoPrompt,
           durationSec: shot.durationSec,
-          engineId: "wan-3-0-std",
+          engineId: prevVideo ? "seedance-2-5-extend" : "seedance-2-5",
+          motionUrl: prevVideo || undefined,
           characterId: open.characterId,
         }),
       });

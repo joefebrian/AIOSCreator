@@ -78,7 +78,7 @@ function WorkspaceInner() {
   }, [busy]);
 
   const followJob = useCallback(
-    async (jobId: string, label: string) => {
+    async (jobId: string, label: string, opts?: { release?: boolean }) => {
       try {
         sessionStorage.setItem(jobKey(id), JSON.stringify({ jobId, label }));
       } catch {
@@ -95,14 +95,17 @@ function WorkspaceInner() {
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
+        throw err;
       } finally {
-        try {
-          sessionStorage.removeItem(jobKey(id));
-        } catch {
-          /* ignore */
+        if (opts?.release !== false) {
+          try {
+            sessionStorage.removeItem(jobKey(id));
+          } catch {
+            /* ignore */
+          }
+          setBusy("");
+          setProgress("");
         }
-        setBusy("");
-        setProgress("");
       }
     },
     [id, load],
@@ -140,7 +143,11 @@ function WorkspaceInner() {
         }
       }
       if (!jobId || cancelled) return;
-      await followJob(jobId, label);
+      try {
+        await followJob(jobId, label);
+      } catch {
+        /* followJob already surfaces the error */
+      }
     })();
     return () => {
       cancelled = true;
@@ -178,7 +185,9 @@ function WorkspaceInner() {
     motionUrl?: string;
     engineId?: string;
     sound?: boolean;
+    extraUrls?: string[];
     orientation?: "image" | "video";
+    productId?: string;
   }) {
     setBusy("motion");
     setError("");
@@ -221,27 +230,55 @@ function WorkspaceInner() {
       progress={progress}
       onGenSlot={(slot, prompt) => genSlot(slot, prompt)}
       onEdit={async (opts) => {
+        const count = Math.min(4, Math.max(1, Math.round(opts.count || 1)));
+        setBusy("edit");
         setError("");
         setNotice("");
+        const problems: string[] = [];
         try {
-          const res = await fetch(`/api/characters/${id}?op=edit`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(opts),
-          });
-          const json = await res.json();
-          if (!res.ok) throw new Error(json.error || "edit failed");
-          if (Array.isArray(json.warnings) && json.warnings.length) {
-            setNotice(json.warnings.join(" "));
+          for (let i = 0; i < count; i++) {
+            if (count > 1) setNotice(`Image ${i + 1} of ${count}`);
+            const res = await fetch(`/api/characters/${id}?op=edit`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(opts),
+            });
+            const json = await res.json();
+            if (!res.ok) {
+              problems.push(json.error || "edit failed");
+              continue;
+            }
+            if (i === 0 && Array.isArray(json.warnings) && json.warnings.length) {
+              setNotice(json.warnings.filter(Boolean).slice(0, 2).join(" · "));
+            }
+            if (json.jobId && (res.status === 202 || json.pending)) {
+              try {
+                await followJob(json.jobId, opts.mode === "face-swap" ? "face-swap" : "edit", {
+                  release: false,
+                });
+              } catch (err) {
+                problems.push(err instanceof Error ? err.message : String(err));
+              }
+              continue;
+            }
+            if (json.id) setRow(json);
+            else load();
           }
-          if (json.jobId && (res.status === 202 || json.pending)) {
-            await followJob(json.jobId, opts.mode === "face-swap" ? "face-swap" : "edit");
-            return;
-          }
-          if (json.id) setRow(json);
-          else load();
         } catch (err) {
-          setError(err instanceof Error ? err.message : String(err));
+          problems.push(err instanceof Error ? err.message : String(err));
+        } finally {
+          try {
+            sessionStorage.removeItem(jobKey(id));
+          } catch {
+            /* ignore */
+          }
+          setBusy("");
+          setProgress("");
+          if (problems.length) setError(problems[0] || "edit failed");
+          if (count > 1) {
+            const done = count - problems.length;
+            setNotice(done === count ? `${count} images` : `${done} of ${count} images`);
+          }
         }
       }}
       onUpscale={async (slot) => {
@@ -298,6 +335,25 @@ function WorkspaceInner() {
         })();
       }}
       onMotion={(opts) => void generateMotion(opts)}
+      onReplicate={(opts) => {
+        void (async () => {
+          setBusy("replicate");
+          setError("");
+          try {
+            const res = await fetch(`/api/characters/${id}/replicate`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(opts),
+            });
+            const json = await readJson<{ id?: string; error?: string }>(res);
+            if (!res.ok) throw new Error(json.error || "replicate failed");
+            if (json.id) await followJob(json.id, "replicate");
+          } catch (err) {
+            setError(err instanceof Error ? err.message : String(err));
+            setBusy("");
+          }
+        })();
+      }}
       onToggleInspiration={async (item) => {
         setError("");
         try {

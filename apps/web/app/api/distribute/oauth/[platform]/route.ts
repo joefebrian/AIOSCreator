@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { startOauthUrl } from "@/lib/social-oauth";
+import { distributeAccountsUrl, startOauthUrl } from "@/lib/social-oauth";
 import { SOCIAL_PLATFORMS, type SocialPlatform } from "@/lib/social-accounts";
 
 export const runtime = "nodejs";
@@ -17,6 +17,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ platform: strin
     return NextResponse.redirect(loc);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.redirect(new URL(`/distribute/accounts?error=${encodeURIComponent(message)}`, req.url));
+    const dest = distributeAccountsUrl(req, platform as SocialPlatform);
+    dest.searchParams.set("error", message);
+    return NextResponse.redirect(dest);
   }
 }

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Page, Pill, Surface } from "@/components/ui";
-import { money } from "@/lib/cloud-rates";
+import { GROK_IMAGINE_QUOTE, grokImagineStillUsd, grokImagineVideoUsd, money } from "@/lib/cloud-rates";
 
 type ModelRow = {
   model: string;
@@ -80,6 +80,7 @@ type Dash = {
   fail: number;
   spendUsd: number;
   costPerOk: number;
+  scriptUgc?: { label: string; calls: number; ok: number; fail: number; tokens: number; spendUsd: number };
   byModel: ModelRow[];
   byProvider: ProviderRow[];
   log: LogRow[];
@@ -139,6 +140,57 @@ export default function UsagePage() {
       }
     >
       {error ? <p className="text-[12px] text-red-600">{error}</p> : null}
+
+      <Surface className="mb-6">
+        <p className="text-[11px] font-semibold tracking-[0.16em] text-[#9CA3AF]">GROK IMAGINE · WHAT WE SEND</p>
+        <p className="mt-1 text-[13px] text-[#4B5563]">
+          Stills: <span className="font-semibold">{GROK_IMAGINE_QUOTE.imageModel}</span> — auto 1K medium
+          (face/SKU) or 2K low (poster), both $0.06. Video:{" "}
+          <span className="font-semibold">{GROK_IMAGINE_QUOTE.videoModel}</span> · 720p 9:16. Not V1.
+        </p>
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[32rem] text-left text-[13px]">
+            <thead>
+              <tr className="text-[11px] font-semibold tracking-[0.12em] text-[#9CA3AF]">
+                <th className="pb-2 font-semibold">Job</th>
+                <th className="pb-2 font-semibold">Bill</th>
+                <th className="pb-2 font-semibold">On $10 cap</th>
+              </tr>
+            </thead>
+            <tbody className="text-[#111827]">
+              <tr className="border-t border-[#E6E8EE]">
+                <td className="py-2">Still generate · auto 2K low</td>
+                <td>{money(grokImagineStillUsd(0))}</td>
+                <td>~{Math.floor(10 / grokImagineStillUsd(0))} stills</td>
+              </tr>
+              <tr className="border-t border-[#E6E8EE]">
+                <td className="py-2">Still edit · auto 1K medium · 1 ref</td>
+                <td>{money(grokImagineStillUsd(1))}</td>
+                <td>~{Math.floor(10 / grokImagineStillUsd(1))} edits</td>
+              </tr>
+              <tr className="border-t border-[#E6E8EE]">
+                <td className="py-2">Still edit · auto 1K medium · 2 refs</td>
+                <td>{money(grokImagineStillUsd(2))}</td>
+                <td>~{Math.floor(10 / grokImagineStillUsd(2))} edits</td>
+              </tr>
+              <tr className="border-t border-[#E6E8EE]">
+                <td className="py-2">I2V 6s 720p + still input</td>
+                <td>{money(grokImagineVideoUsd(6, 1).usd)}</td>
+                <td>~{Math.floor(10 / grokImagineVideoUsd(6, 1).usd)} clips</td>
+              </tr>
+              <tr className="border-t border-[#E6E8EE]">
+                <td className="py-2">I2V 15s 720p + still input</td>
+                <td>{money(grokImagineVideoUsd(15, 1).usd)}</td>
+                <td>~{Math.floor(10 / grokImagineVideoUsd(15, 1).usd)} clips</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-3 text-[12px] text-[#6B7280]">
+          2.0 output: 1K low $0.04 · 1K medium $0.06 · 2K low $0.06 · 2K medium $0.08. Image input $0.01. Text free. Video 1.5:
+          480p $0.08/s · 720p $0.14/s · 1080p $0.25/s.
+        </p>
+      </Surface>
 
       {data?.cap ? (
         <div
@@ -265,6 +317,11 @@ export default function UsagePage() {
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Stat
+          label="Script_UGC"
+          value={money(data?.scriptUgc?.spendUsd || 0)}
+          hint={`${data?.scriptUgc?.ok ?? 0} ok · ${(data?.scriptUgc?.tokens ?? 0).toLocaleString()} tok · Astra`}
+        />
         <Stat label="Spend" value={money(data?.spendUsd || 0)} hint="ok jobs × list rate" />
         <Stat label="$ / result" value={money(data?.costPerOk || 0)} hint="spend ÷ ok" />
         <Stat label="OK" value={String(data?.ok ?? 0)} hint={`${data?.fail ?? 0} fail`} tone="ready" />

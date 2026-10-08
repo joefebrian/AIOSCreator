@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import { SLOT_DEFS, type SlotKey } from "./character-prompts";
 import type { Character, CharacterEdit, CharacterSlot, CharacterSource } from "./character-types";
+import { cleanMarkets } from "./markets";
 import { characterFile, charactersDbFile, ensureDataDirs, mediaUrlToPath } from "./paths";
 import { deleteJobsByMediaUrl } from "./store";
 
@@ -109,11 +110,20 @@ export function listCharacters(): Character[] {
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
+export function characterThumbUrl(c: Character): string | null {
+  return c.slots.find((s) => s.key === "headshot")?.url || c.identityUrl4k || c.identityUrl;
+}
+
 export function listCharactersLite() {
   return listCharacters().map((c) => ({
     id: c.id,
     name: c.name,
     identityUrl: c.identityUrl,
+    thumbUrl: characterThumbUrl(c),
+    poseUrl:
+      c.slots.find((s) => s.key === "front" && s.url)?.url ||
+      c.edits?.find((e) => e.url)?.url ||
+      c.identityUrl,
     identityUpscaled: Boolean(c.identityUpscaled),
     updatedAt: c.updatedAt,
     visibility: c.visibility || "private",
@@ -123,6 +133,7 @@ export function listCharactersLite() {
     followers: (c.socialAccounts ?? [])
       .filter((a) => a.status === "connected")
       .reduce((n, a) => n + (a.followers || 0), 0),
+    markets: c.markets || [],
   }));
 }
 
@@ -130,7 +141,7 @@ export function getCharacter(id: string): Character | undefined {
   return readStore().characters.find((c) => c.id === id);
 }
 
-export function createCharacter(input: { name?: string; source: CharacterSource; sourcePrompt?: string }): Character {
+export function createCharacter(input: { name?: string; source: CharacterSource; sourcePrompt?: string; markets?: unknown }): Character {
   const now = new Date().toISOString();
   const name = (input.name ?? "").trim() || "Untitled character";
   const row: Character = {
@@ -140,6 +151,7 @@ export function createCharacter(input: { name?: string; source: CharacterSource;
     sourcePrompt: input.sourcePrompt?.trim() || undefined,
     identityUrl: null,
     slots: emptySlots(),
+    markets: cleanMarkets(input.markets),
     createdAt: now,
     updatedAt: now,
   };
@@ -154,6 +166,7 @@ export function updateCharacter(id: string, patch: Partial<Character>): Characte
   const i = store.characters.findIndex((c) => c.id === id);
   if (i < 0) return undefined;
   const next = { ...store.characters[i], ...patch, id, updatedAt: new Date().toISOString() };
+  if ("markets" in patch) next.markets = cleanMarkets(patch.markets);
   store.characters[i] = next;
   writeStore(store);
   return next;
@@ -165,6 +178,75 @@ export function deleteCharacter(id: string): boolean {
   if (next.length === store.characters.length) return false;
   writeStore({ characters: next });
   return true;
+}
+
+/** Absorb duplicate character rows into keepId. Media files stay; jobs must be retargeted by the caller. */
+export function mergeCharacters(keepId: string, absorbIds: string[]): Character | undefined {
+  const store = readStore();
+  const keep = store.characters.find((c) => c.id === keepId);
+  if (!keep) return undefined;
+  const absorb = absorbIds
+    .filter((id) => id && id !== keepId)
+    .map((id) => store.characters.find((c) => c.id === id))
+    .filter((c): c is Character => Boolean(c));
+  if (!absorb.length) return keep;
+
+  const slots = keep.slots.map((s) => ({ ...s }));
+  const byKey = new Map(slots.map((s) => [s.key, s]));
+  const edits: CharacterEdit[] = [...(keep.edits ?? [])];
+  const inspiration = [...(keep.inspiration ?? [])];
+  const seenInsp = new Set(inspiration.map((p) => p.url));
+
+  for (const src of absorb) {
+    for (const s of src.slots) {
+      if (!s.url) continue;
+      const dest = byKey.get(s.key);
+      if (dest && !dest.url) {
+        dest.url = s.url;
+        dest.url4k = s.url4k;
+        dest.jobId = s.jobId;
+        dest.upscaled = s.upscaled;
+      } else {
+        edits.unshift({
+          id: randomUUID(),
+          url: s.url,
+          prompt: `${src.name} · ${s.label}`,
+          baseUrl: s.url,
+          mode: "merge",
+          createdAt: src.updatedAt,
+        });
+      }
+    }
+    if (src.identityUrl && src.identityUrl !== keep.identityUrl) {
+      const head = byKey.get("headshot");
+      if (head && !head.url) {
+        head.url = src.identityUrl;
+      } else {
+        edits.unshift({
+          id: randomUUID(),
+          url: src.identityUrl,
+          prompt: `${src.name} · identity`,
+          baseUrl: src.identityUrl,
+          mode: "merge",
+          createdAt: src.updatedAt,
+        });
+      }
+    }
+    for (const e of src.edits ?? []) edits.push(e);
+    for (const p of src.inspiration ?? []) {
+      if (seenInsp.has(p.url)) continue;
+      seenInsp.add(p.url);
+      inspiration.push(p);
+    }
+  }
+
+  keep.slots = slots;
+  keep.edits = edits;
+  keep.inspiration = inspiration;
+  keep.updatedAt = new Date().toISOString();
+  store.characters = store.characters.filter((c) => !absorb.some((a) => a.id === c.id));
+  writeStore(store);
+  return keep;
 }
 
 export function setSlot(id: string, key: SlotKey, patch: Partial<CharacterSlot>): Character | undefined {

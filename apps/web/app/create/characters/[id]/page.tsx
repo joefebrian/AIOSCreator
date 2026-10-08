@@ -7,6 +7,7 @@ import { CharacterIdentityStage } from "@/components/create/CharacterIdentitySta
 
 import { IDENTITY_PLATE_PROMPT, SLOT_GROUPS, TRANSFORM_PLATE_PROMPT } from "@/lib/character-prompts";
 import type { Character, CharacterSlot } from "@/lib/character-types";
+import { CountryChips } from "@/components/CountryChips";
 import { AspectPicker } from "@/components/AspectPicker";
 import { Page } from "@/components/ui";
 import { formatElapsed, pollJob, readJson } from "@/lib/http";
@@ -243,6 +244,27 @@ export default function CharacterEditorPage() {
     >
 
       <p className="mt-4 text-[12px] text-[#6B7280]">Stills locked to GPT Image 2.5 Sunburst.</p>
+      <div className="mt-4 max-w-3xl">
+        <p className="text-[12px] font-semibold text-[#6B7280]">Country</p>
+        <p className="mt-1 text-[12px] text-[#6B7280]">Countries this person can join on a campaign.</p>
+        <div className="mt-1.5">
+          <CountryChips
+            value={row?.markets || []}
+            onChange={(next) => {
+              setRow((cur) => (cur ? { ...cur, markets: next as Character["markets"] } : cur));
+              void fetch(`/api/characters/${id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ markets: next }),
+              }).then(async (res) => {
+                const json = await res.json();
+                if (!res.ok) throw new Error(json.error || "Save failed.");
+                setRow(json as Character);
+              }).catch((err) => setError(err instanceof Error ? err.message : String(err)));
+            }}
+          />
+        </div>
+      </div>
       <h2 className="mt-8 text-[11px] font-semibold tracking-[0.18em] text-[#9CA3AF]">1 · BEFORE / AFTER</h2>
       <div className="mt-3">
         <CharacterIdentityStage

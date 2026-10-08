@@ -9,7 +9,22 @@ import {
 
 export const runtime = "nodejs";
 
-const ENGINES: ImageEngineId[] = ["gpt-image-2.5", "gpt-image-2", "seedream-5-pro", "seedream-4-5", "nano-banana"];
+const ENGINES: ImageEngineId[] = [
+  "gpt-image-2.5",
+  "gpt-image-2.5-flare",
+  "gpt-image-2",
+  "seedream-5-pro",
+  "seedream-5-lite",
+  "seedream-4-5",
+  "muse-image-1.0",
+  "qwen-image-3.0",
+  "nano-banana",
+  "grok-imagine",
+  "grok-imagine-tryon",
+  "kling-image-omni",
+  "kolors-virtual-try-on",
+  "marketing-studio-image",
+];
 
 export async function GET() {
   return NextResponse.json(listImageProviders());
@@ -31,7 +46,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, ...listImageProviders() });
     }
     const engineId = body.engineId as ImageEngineId;
-    if (!ENGINES.includes(engineId)) throw new Error("engineId must be gpt-image-2.5, gpt-image-2, seedream-5-pro, seedream-4-5, or nano-banana");
+    if (!ENGINES.includes(engineId)) throw new Error("unknown image engine");
     addImageProvider({
       engineId,
       name: body.name,

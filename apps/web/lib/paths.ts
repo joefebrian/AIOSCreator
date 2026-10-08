@@ -24,6 +24,16 @@ export function ensureDataDirs() {
     path.join(root, "media", "products"),
     path.join(root, "media", "thumbs"),
     path.join(root, "media", "voices"),
+    path.join(root, "media", "clean-dl"),
+    path.join(root, "media", "factory"),
+    path.join(root, "media", "UGC_Factory"),
+    path.join(root, "media", "UGC_Fashion"),
+    path.join(root, "media", "AI_Studio"),
+    path.join(root, "media", "MotionControl"),
+    path.join(root, "media", "ShortDrama"),
+    path.join(root, "media", "Characters"),
+    path.join(root, "media", "Research"),
+    path.join(root, "media", "Products"),
   ]) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -70,6 +80,12 @@ export function imageFile(id: string, ext = "png") {
   return path.join(ensureDataDirs(), "media", "images", `${id}.${ext}`);
 }
 
+export function factoryStillFile(id: string, ext = "png") {
+  const dir = path.join(ensureDataDirs(), "media", "UGC_Factory");
+  fs.mkdirSync(dir, { recursive: true });
+  return path.join(dir, `AIOSCreator-UGC_Factory-${id}.${ext}`);
+}
+
 export function characterFile(id: string, ext = "png") {
   return path.join(ensureDataDirs(), "media", "characters", `${id}.${ext}`);
 }
@@ -101,7 +117,8 @@ export function still4kPair(srcPath: string, srcUrl: string) {
 }
 
 export function mediaUrlToPath(url: string) {
-  const rel = url.replace("/api/media/", "").replaceAll("/", path.sep);
+  const clean = url.split("?")[0].split("#")[0];
+  const rel = clean.replace("/api/media/", "").replaceAll("/", path.sep);
   return path.join(dataRoot(), "media", rel);
 }
 
@@ -130,4 +147,14 @@ export function productFile(id: string, ext = "png") {
 export function productMediaUrl(id: string, ext = "png") {
   const e = ext.replace(/^\./, "").toLowerCase();
   return `/api/media/products/${id}.${e}`;
+}
+
+export function referenceAdFile(id: string, ext: string) {
+  const dir = path.join(ensureDataDirs(), "media", "reference-ads");
+  fs.mkdirSync(dir, { recursive: true });
+  return path.join(dir, `${id}.${ext.replace(/^\./, "")}`);
+}
+
+export function referenceAdUrl(id: string, ext: string) {
+  return `/api/media/reference-ads/${id}.${ext.replace(/^\./, "")}`;
 }

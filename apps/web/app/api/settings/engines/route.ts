@@ -30,7 +30,7 @@ export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as {
     kind?: "image" | "motion";
     id?: string;
-    via?: "auto" | "comet" | "openai" | "byteplus" | "kling" | "wavespeed" | "hensun" | "fal" | "comfy";
+    via?: "auto" | "comet" | "openai" | "byteplus" | "kling" | "wavespeed" | "fal" | "comfy";
   };
   try {
     if (body.kind !== "image" && body.kind !== "motion") throw new Error("kind must be image or motion");

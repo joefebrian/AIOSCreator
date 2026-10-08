@@ -21,9 +21,13 @@ export function ensureImageThumb(abs: string, width: number) {
   if (fs.existsSync(dest) && fs.statSync(dest).mtimeMs >= srcM && fs.statSync(dest).size > 200) {
     return dest;
   }
+  const png = path.extname(abs).toLowerCase() === ".png";
+  const vf = png
+    ? `scale=${w}:-2:flags=lanczos,format=rgba,split[fg][base];[base]format=rgba,geq=r=243:g=244:b=248:a=255[bg];[bg][fg]overlay`
+    : `scale=${w}:-2`;
   const run = spawnSync(
     FFMPEG,
-    ["-y", "-i", abs, "-vf", `scale=${w}:-2`, "-q:v", "5", dest],
+    ["-y", "-i", abs, "-vf", vf, "-q:v", "5", dest],
     { windowsHide: true, encoding: "utf8" },
   );
   if (run.status === 0 && fs.existsSync(dest) && fs.statSync(dest).size > 200) return dest;

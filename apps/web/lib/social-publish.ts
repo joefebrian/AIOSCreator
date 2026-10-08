@@ -2,12 +2,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { ensureDataDirs, mediaUrlToPath } from "./paths";
 import { listPublications, type Publication, updatePublication } from "./publications";
+import { canStripAiMarks, stripAiMarksForDownload } from "./strip-ai-marks";
 import {
   getSocialAccount,
   socialApps,
   upsertSocialAccount,
   type SocialAccount,
 } from "./social-accounts";
+import { PINTEREST_API } from "./social-oauth";
 
 const YT_INSERT_CAP = 12;
 
@@ -88,12 +90,20 @@ async function refreshTiktok(row: SocialAccount): Promise<SocialAccount> {
   });
 }
 
-export function writeExportPack(post: Publication): string {
+/** Library masters stay. The copy that leaves this PC has C2PA/EXIF and the corner mark removed. */
+async function fileForUpload(mediaUrl: string): Promise<string> {
+  const src = mediaUrlToPath(mediaUrl);
+  if (!src || !fs.existsSync(src)) throw new Error("media file missing");
+  if (!canStripAiMarks(path.extname(src))) return src;
+  return stripAiMarksForDownload(src);
+}
+
+export async function writeExportPack(post: Publication): Promise<string> {
   const dir = path.join(ensureDataDirs(), "media", "exports", post.id);
   fs.mkdirSync(dir, { recursive: true });
-  const src = mediaUrlToPath(post.mediaUrl);
+  const src = await fileForUpload(post.mediaUrl);
   const destMedia = path.join(dir, `media${extOf(src) || (post.mediaType === "video" ? ".mp4" : ".png")}`);
-  if (fs.existsSync(src)) fs.copyFileSync(src, destMedia);
+  fs.copyFileSync(src, destMedia);
   fs.writeFileSync(path.join(dir, "caption.txt"), post.caption || "", "utf8");
   fs.writeFileSync(
     path.join(dir, "disclosure.md"),
@@ -137,8 +147,7 @@ async function publishYoutube(account: SocialAccount, post: Publication): Promis
   if (used >= 8) {
     // warn only — still allow until 12
   }
-  const file = mediaUrlToPath(post.mediaUrl);
-  if (!fs.existsSync(file)) throw new Error("media file missing");
+  const file = await fileForUpload(post.mediaUrl);
   const size = fs.statSync(file).size;
   const privacy = post.approval === "approved" ? post.privacy : "private";
   const tags = (post.tags || "")
@@ -191,8 +200,7 @@ async function publishTiktokInbox(account: SocialAccount, post: Publication): Pr
   const live = await refreshTiktok(account);
   if (!live.accessToken) throw new Error("TikTok not connected");
   if (post.mediaType !== "video") throw new Error("TikTok inbox MVP is video. Use Export pack for stills.");
-  const file = mediaUrlToPath(post.mediaUrl);
-  if (!fs.existsSync(file)) throw new Error("media file missing");
+  const file = await fileForUpload(post.mediaUrl);
   const size = fs.statSync(file).size;
   const init = await fetch("https://open.tiktokapis.com/v2/post/publish/inbox/video/init/", {
     method: "POST",
@@ -243,20 +251,86 @@ async function publishX(account: SocialAccount, post: Publication): Promise<stri
   return json.data.id;
 }
 
+export type PinterestBoard = { id: string; name: string; privacy?: string };
+
+function pinterestFailure(status: number, message: string) {
+  if (status === 401 || /authentication failed/i.test(message)) {
+    return "Reconnect Pinterest on Accounts. Sandbox needs its own token. This login is still a production token.";
+  }
+  if (/boards:write/i.test(message)) {
+    return "Reconnect Pinterest on Accounts and allow Boards write. This login cannot create a pin until then.";
+  }
+  if (/trial access/i.test(message)) {
+    return "This Pinterest app is still Trial. Sandbox is on, but this call reached production.";
+  }
+  return message;
+}
+
+export async function listPinterestBoards(account: SocialAccount): Promise<PinterestBoard[]> {
+  if (!account.accessToken) throw new Error("Pinterest not connected");
+  const out: PinterestBoard[] = [];
+  let bookmark = "";
+  for (let page = 0; page < 6; page++) {
+    const url = new URL(`${PINTEREST_API}/v5/boards`);
+    url.searchParams.set("page_size", "250");
+    if (bookmark) url.searchParams.set("bookmark", bookmark);
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${account.accessToken}` } });
+    const json = (await res.json()) as {
+      items?: { id?: string; name?: string; privacy?: string }[];
+      bookmark?: string;
+      message?: string;
+    };
+    if (!res.ok) throw new Error(pinterestFailure(res.status, json.message || `Pinterest boards HTTP ${res.status}`));
+    for (const board of json.items || []) {
+      if (board.id && board.name) out.push({ id: board.id, name: board.name, privacy: board.privacy });
+    }
+    if (!json.bookmark || json.bookmark === bookmark) break;
+    bookmark = json.bookmark;
+  }
+  if (!out.length) {
+    const created = await createPinterestBoard(account, "CreatorOS");
+    out.push(created);
+  }
+  if (out.length && account.lastError?.includes("at least one board")) {
+    upsertSocialAccount({ ...account, lastError: undefined, connectionState: "connected" });
+  }
+  return out;
+}
+
+async function createPinterestBoard(account: SocialAccount, name: string): Promise<PinterestBoard> {
+  const res = await fetch(`${PINTEREST_API}/v5/boards`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${account.accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ name, privacy: "PUBLIC" }),
+  });
+  const json = (await res.json()) as { id?: string; name?: string; privacy?: string; message?: string };
+  if (!res.ok || !json.id || !json.name) {
+    throw new Error(pinterestFailure(res.status, json.message || `Pinterest board HTTP ${res.status}`));
+  }
+  return { id: json.id, name: json.name, privacy: json.privacy };
+}
+
+/** The board saved on the post, or the only board on the login. */
+export async function resolvePinterestBoard(account: SocialAccount, picked?: string): Promise<PinterestBoard> {
+  const boards = await listPinterestBoards(account);
+  if (picked) {
+    const hit = boards.find((board) => board.id === picked);
+    if (!hit) throw new Error("That board is not in Sandbox. Pick the Sandbox board. The live board stays separate.");
+    return hit;
+  }
+  if (boards.length === 1) return boards[0];
+  if (!boards.length) throw new Error("Pinterest needs at least one board on the tester account");
+  throw new Error("Pick a Pinterest board");
+}
+
 async function publishPinterest(account: SocialAccount, post: Publication): Promise<string> {
   if (!account.accessToken) throw new Error("Pinterest not connected");
-  const file = mediaUrlToPath(post.mediaUrl);
-  if (!fs.existsSync(file)) throw new Error("media missing");
-  const boards = await fetch("https://api.pinterest.com/v5/boards?page_size=1", {
-    headers: { Authorization: `Bearer ${account.accessToken}` },
-  });
-  const boardJson = (await boards.json()) as { items?: { id?: string }[]; message?: string };
-  const boardId = boardJson.items?.[0]?.id;
-  if (!boards.ok || !boardId) throw new Error(boardJson.message || "Pinterest needs at least one board on the tester account");
+  const file = await fileForUpload(post.mediaUrl);
+  const boardId = (await resolvePinterestBoard(account, post.boardId)).id;
   const data = fs.readFileSync(file).toString("base64");
   const ext = extOf(file);
   const contentType = ext === ".png" ? "image/png" : ext === ".webp" ? "image/webp" : "image/jpeg";
-  const res = await fetch("https://api.pinterest.com/v5/pins", {
+  const res = await fetch(`${PINTEREST_API}/v5/pins`, {
     method: "POST",
     headers: { Authorization: `Bearer ${account.accessToken}`, "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -267,7 +341,9 @@ async function publishPinterest(account: SocialAccount, post: Publication): Prom
     }),
   });
   const json = (await res.json()) as { id?: string; message?: string };
-  if (!res.ok || !json.id) throw new Error(json.message || `Pinterest pin HTTP ${res.status}`);
+  if (!res.ok || !json.id) {
+    throw new Error(pinterestFailure(res.status, json.message || `Pinterest pin HTTP ${res.status}`));
+  }
   return json.id;
 }
 
@@ -279,7 +355,7 @@ export async function publishNow(post: Publication): Promise<Publication> {
 
   try {
     if (post.mode === "export" || !account.accessToken) {
-      const pack = writeExportPack(post);
+      const pack = await writeExportPack(post);
       return updatePublication(post.id, {
         status: "exported",
         exportPath: pack,
@@ -316,6 +392,7 @@ export async function publishNow(post: Publication): Promise<Publication> {
     if (post.platform === "pinterest") {
       if (post.mediaType === "video") throw new Error("Pinterest Direct is stills. Use Export for video.");
       const id = await publishPinterest(account, post);
+      upsertSocialAccount({ ...account, lastError: undefined, connectionState: "connected" });
       return updatePublication(post.id, {
         status: "published",
         platformPostId: id,
@@ -323,7 +400,7 @@ export async function publishNow(post: Publication): Promise<Publication> {
       })!;
     }
     if (post.platform === "threads") {
-      const pack = writeExportPack(post);
+      const pack = await writeExportPack(post);
       return updatePublication(post.id, {
         status: "exported",
         exportPath: pack,
@@ -331,7 +408,7 @@ export async function publishNow(post: Publication): Promise<Publication> {
         publishedAt: new Date().toISOString(),
       })!;
     }
-    const pack = writeExportPack(post);
+    const pack = await writeExportPack(post);
     return updatePublication(post.id, {
       status: "exported",
       exportPath: pack,

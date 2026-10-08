@@ -77,10 +77,10 @@ export async function ffmpegStill4k(srcImage: string, destPng: string) {
   });
 }
 
-/** Product-only stills for Qwen. Never stack the person next to the SKU (that made diptych outputs). */
+/** Product-only stills. Never stack the person next to the SKU (that made diptych outputs). */
 export async function composeProductRefs(paths: string[], dest: string) {
   fs.mkdirSync(path.dirname(dest), { recursive: true });
-  const inputs = paths.filter((p) => fs.existsSync(p)).slice(0, 3);
+  const inputs = paths.filter((p) => fs.existsSync(p)).slice(0, 6);
   if (!inputs.length) throw new Error("product image not on disk");
   const n = inputs.length;
   if (n === 1) {
@@ -94,17 +94,32 @@ export async function composeProductRefs(paths: string[], dest: string) {
     ]);
     return;
   }
-  const cellH = Math.floor(1280 / n);
+  const cols = n <= 3 ? 1 : n <= 4 ? 2 : 3;
+  const rows = Math.ceil(n / cols);
+  const cellW = cols === 1 ? 768 : 480;
+  const cellH = cols === 1 ? Math.max(280, Math.floor(1280 / n)) : 480;
   const args = ["-y"];
   for (const p of inputs) args.push("-i", p);
-  const scaled = inputs
-    .map(
-      (_, i) =>
-        `[${i}:v]scale=768:${cellH}:force_original_aspect_ratio=decrease:flags=lanczos,pad=768:${cellH}:(ow-iw)/2:(oh-ih)/2:white[p${i}]`,
-    )
-    .join(";");
-  const stack = `${inputs.map((_, i) => `[p${i}]`).join("")}vstack=inputs=${n}`;
-  args.push("-filter_complex", `${scaled};${stack}`, dest);
+  const parts: string[] = [];
+  for (let i = 0; i < n; i++) {
+    parts.push(
+      `[${i}:v]scale=${cellW}:${cellH}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${cellW}:${cellH}:(ow-iw)/2:(oh-ih)/2:white[p${i}]`,
+    );
+  }
+  const grid = cols * rows;
+  for (let i = n; i < grid; i++) {
+    parts.push(`color=c=white:s=${cellW}x${cellH}:d=1[p${i}]`);
+  }
+  if (cols === 1) {
+    parts.push(`${inputs.map((_, i) => `[p${i}]`).join("")}vstack=inputs=${n}`);
+  } else {
+    for (let r = 0; r < rows; r++) {
+      const tags = Array.from({ length: cols }, (_, c) => `[p${r * cols + c}]`).join("");
+      parts.push(`${tags}hstack=inputs=${cols}[r${r}]`);
+    }
+    parts.push(`${Array.from({ length: rows }, (_, r) => `[r${r}]`).join("")}vstack=inputs=${rows}`);
+  }
+  args.push("-filter_complex", parts.join(";"), dest);
   await run(FFMPEG, args);
 }
 

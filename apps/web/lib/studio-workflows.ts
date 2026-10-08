@@ -42,10 +42,16 @@ export function getStudioWorkflow(id: string) {
 export function saveStudioWorkflow(input: { id?: string; name: string; nodes: unknown[]; edges: unknown[] }) {
   const store = readStore();
   const now = new Date().toISOString();
-  const existing = input.id ? store.workflows.find((w) => w.id === input.id) : undefined;
+  const name = input.name.trim() || "Untitled workflow";
+  const byId = input.id ? store.workflows.find((w) => w.id === input.id) : undefined;
+  const byName = store.workflows.find((w) => w.name.toLowerCase() === name.toLowerCase());
+  const existing =
+    byId && byId.name.toLowerCase() !== "product-ugc" && name.toLowerCase() === "product-ugc"
+      ? undefined
+      : byId || byName;
   const row: StudioWorkflow = {
     id: existing?.id || randomUUID(),
-    name: input.name.trim() || "Untitled workflow",
+    name,
     nodes: input.nodes,
     edges: input.edges,
     createdAt: existing?.createdAt || now,

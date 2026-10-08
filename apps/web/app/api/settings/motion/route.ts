@@ -9,7 +9,7 @@ import {
 
 export const runtime = "nodejs";
 
-const ENGINES: MotionEngineId[] = ["kling-2-6", "kling-3-0", "dreamactor-v2", "wan-3-0"];
+const ENGINES: MotionEngineId[] = ["kling-2-6", "kling-3-0", "dreamactor-v2"];
 
 export async function GET() {
   return NextResponse.json(listMotionProviders());

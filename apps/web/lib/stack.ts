@@ -1,6 +1,8 @@
 import { listApiAccounts, type ApiProviderId } from "./api-providers";
 import { listEngines, selectedEngines } from "./engines";
+import { probeJev } from "./jev";
 import { llmConfig, revampLlmConfig } from "./llm";
+import { jevConfig } from "./providers";
 import { voiceStudioConfig, probeVoiceStudio } from "./voice-studio";
 
 export type StackJob = {
@@ -29,13 +31,13 @@ export type StackWallet = {
 
 const TOPUP: Record<string, string> = {
   comfy: "Local 3060 — no top-up",
-  comet: "cometapi.com → Billing",
   openai: "platform.openai.com → Billing",
   byteplus: "BytePlus Ark console",
+  meta: "dev.meta.ai → API keys",
   kling: "kling.ai / app.klingai.com → API credits",
   fal: "fal.ai → Billing",
   dashscope: "modelstudio.console.alibabacloud.com → Singapore billing",
-  hensun: "hensunai.com wallet",
+
   openrouter: "openrouter.ai → Credits",
   lmstudio: "Local RAM/CPU — no top-up",
   voicestudio: "Local VoiceStudio — no top-up",
@@ -72,6 +74,7 @@ export function buildStack() {
     /* none */
   }
   const vs = voiceStudioConfig();
+  const jev = jevConfig();
 
   const jobs: StackJob[] = [
     {
@@ -91,13 +94,13 @@ export function buildStack() {
       id: "edit",
       job: "Edit image (chat / product / undress)",
       where: "Characters · Edit image",
-      model: "Qwen Image Edit (forced for swap/product)",
-      modelId: "qwen-image-edit",
+      model: "Qwen Image 2.1",
+      modelId: "qwen-image-2.1",
       provider: "Local Comfy",
       providerId: "comfy",
       cost: "GPU only",
       topup: TOPUP.comfy,
-      ready: engines.find((e) => e.id === "qwen-image-edit")?.status === "ready",
+      ready: engines.find((e) => e.id === "qwen-image-2.1")?.status === "ready",
       note: "3060. One GPU job at a time.",
     },
     {
@@ -194,6 +197,19 @@ export function buildStack() {
       ready: llmReady,
       note: "Settings → Saved LLM On/Off. DashScope Qwen is Singapore only.",
     },
+    {
+      id: "jev",
+      job: "Typed decisions (not chat)",
+      where: "UGC Factory · claim gate",
+      model: jev.model,
+      modelId: "jev",
+      provider: "OpenRouter · TypeSafe",
+      providerId: "openrouter",
+      cost: "$0.042/M in · out free",
+      topup: TOPUP.openrouter,
+      ready: jev.ready,
+      note: "Decisions API. Not a stills/script writer.",
+    },
   ];
 
   const accounts = listApiAccounts();
@@ -205,6 +221,14 @@ export function buildStack() {
       topup: TOPUP.comfy,
       ready: true,
       note: "One GPU owner. VO waits.",
+    },
+    {
+      id: "meta",
+      name: "Meta Muse",
+      for: "Muse Image 1.0 stills",
+      topup: TOPUP.meta,
+      ready: keyed("meta"),
+      note: "$0.01/image. Generate + multi-ref edit. Key in Settings.",
     },
     {
       id: "kling",
@@ -221,17 +245,6 @@ export function buildStack() {
       topup: TOPUP.fal,
       ready: keyed("fal"),
       note: "~$0.05/s. Don't use for photoreal face lock.",
-    },
-    {
-      id: "comet",
-      name: "CometAPI",
-      for: "Optional cloud stills (GPT Image, Seedream)",
-      topup: TOPUP.comet,
-      ready: keyed("comet"),
-      balance: accounts.find((a) => a.providerId === "comet")?.lastBalanceUsd != null
-        ? `$${accounts.find((a) => a.providerId === "comet")!.lastBalanceUsd!.toFixed(2)}`
-        : undefined,
-      note: "Only if you pick a cloud still engine.",
     },
     {
       id: "dashscope",
@@ -252,10 +265,10 @@ export function buildStack() {
     {
       id: "openrouter",
       name: "OpenRouter",
-      for: "Script LLM / revamp fallback",
+      for: "Jev 1.13 + revamp fallback",
       topup: TOPUP.openrouter,
-      ready: true,
-      note: "Keep key. Toggle Off when using DashScope or LM Studio.",
+      ready: jev.ready,
+      note: "Jev is Decisions API (typesafe/jev-1.13). Not chat completions.",
     },
     {
       id: "openai",
@@ -280,5 +293,10 @@ export async function buildStackLive() {
   const probe = await probeVoiceStudio();
   const vo = stack.jobs.find((j) => j.id === "vo");
   if (vo) vo.ready = probe.ok;
-  return { ...stack, voiceProbe: probe };
+  const jevProbe = await probeJev();
+  const jevJob = stack.jobs.find((j) => j.id === "jev");
+  if (jevJob) jevJob.ready = jevProbe.ok;
+  const orWallet = stack.wallets.find((w) => w.id === "openrouter");
+  if (orWallet) orWallet.ready = jevProbe.ok || jevConfig().ready;
+  return { ...stack, voiceProbe: probe, jevProbe };
 }

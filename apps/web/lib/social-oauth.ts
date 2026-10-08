@@ -14,6 +14,52 @@ export function originFrom(req: Request) {
   return `${url.protocol}//${url.host}`;
 }
 
+function httpOrigin(raw: string | undefined): string | null {
+  if (!raw?.trim()) return null;
+  try {
+    const u = new URL(raw.trim());
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    if (!u.hostname || u.hostname === "0.0.0.0") return null;
+    return u.origin;
+  } catch {
+    return null;
+  }
+}
+
+/** Where Connect sends the browser after OAuth. Never 0.0.0.0 (Next's bind address). */
+export function distributeAccountsUrl(req: Request, platform?: SocialPlatform) {
+  const apps = socialApps();
+  const preferred =
+    httpOrigin(apps.publicBaseUrl) || (platform ? httpOrigin(apps[platform]?.redirectUri) : null);
+  if (preferred) return new URL("/distribute/accounts", `${preferred}/`);
+  try {
+    const u = new URL(req.url);
+    if (u.hostname === "0.0.0.0") {
+      u.hostname = "127.0.0.1";
+      u.protocol = "http:";
+    }
+    return new URL("/distribute/accounts", `${u.origin}/`);
+  } catch {
+    return new URL("http://127.0.0.1:3000/distribute/accounts");
+  }
+}
+
+/** Pinterest portal "Generate token" values start with pina_/pinr_/pinc_. Those are not the App secret key. */
+/** Trial app. Live pins need Standard access, then point this back at https://api.pinterest.com. */
+export const PINTEREST_API = "https://api-sandbox.pinterest.com";
+
+/** Create Pin requires boards:write even though the call does not create a board. */
+const PINTEREST_SCOPE = "boards:read,boards:write,pins:read,pins:write,user_accounts:read";
+
+export function pinterestSecretProblem(secret: string | undefined): string | null {
+  const s = (secret || "").trim();
+  if (!s) return "Save the Pinterest App secret key first. The App ID alone is not enough.";
+  if (/^pin[acr]_/i.test(s)) {
+    return "That value is a Pinterest access token (it starts with pina_), not the App secret key. On developers.pinterest.com open the app, Configure, and copy App secret key. Do not paste Generate token.";
+  }
+  return null;
+}
+
 export function startOauthUrl(platform: SocialPlatform, req: Request, accountId?: string) {
   const apps = socialApps();
   const origin = originFrom(req);
@@ -85,14 +131,16 @@ export function startOauthUrl(platform: SocialPlatform, req: Request, accountId?
   }
   if (platform === "pinterest") {
     const app = apps.pinterest;
-    if (!app?.clientId) throw new Error("Save Pinterest app id + secret first");
-    const redirect = app.redirectUri || `${origin}/api/distribute/oauth/pinterest/callback`;
+    if (!app?.clientId?.trim()) throw new Error("Save Pinterest app id + secret first");
+    const problem = pinterestSecretProblem(app.clientSecret);
+    if (problem) throw new Error(problem);
+    const redirect = (app.redirectUri || `${origin}/api/distribute/oauth/pinterest/callback`).trim();
     const q = new URLSearchParams({
-      client_id: app.clientId,
+      client_id: app.clientId.trim(),
       redirect_uri: redirect,
       response_type: "code",
       state,
-      scope: "boards:read,pins:read,pins:write,user_accounts:read",
+      scope: PINTEREST_SCOPE,
     });
     return `https://www.pinterest.com/oauth/?${q.toString()}`;
   }
@@ -302,9 +350,13 @@ export async function finishOauth(platform: SocialPlatform, req: Request) {
 
   if (platform === "pinterest") {
     const app = apps.pinterest!;
-    const redirect = app.redirectUri || `${origin}/api/distribute/oauth/pinterest/callback`;
-    const basic = Buffer.from(`${app.clientId}:${app.clientSecret}`).toString("base64");
-    const res = await fetch("https://api.pinterest.com/v5/oauth/token", {
+    const problem = pinterestSecretProblem(app.clientSecret);
+    if (problem) throw new Error(problem);
+    const clientId = app.clientId.trim();
+    const clientSecret = app.clientSecret.trim();
+    const redirect = (app.redirectUri || `${origin}/api/distribute/oauth/pinterest/callback`).trim();
+    const basic = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+    const res = await fetch(`${PINTEREST_API}/v5/oauth/token`, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -314,17 +366,27 @@ export async function finishOauth(platform: SocialPlatform, req: Request) {
         grant_type: "authorization_code",
         code,
         redirect_uri: redirect,
+        continuous_refresh: "true",
       }),
     });
     const json = (await res.json()) as {
       access_token?: string;
       refresh_token?: string;
       expires_in?: number;
+      scope?: string;
       error?: string;
       message?: string;
     };
-    if (!res.ok || !json.access_token) throw new Error(json.message || json.error || `Pinterest token HTTP ${res.status}`);
-    const me = await fetch("https://api.pinterest.com/v5/user_account", {
+    if (!res.ok || !json.access_token) {
+      const detail = json.message || json.error || `Pinterest token HTTP ${res.status}`;
+      if (res.status === 401) {
+        throw new Error(
+          `${detail} Pinterest rejected the App ID and secret. Paste the App secret key from Configure, not a generated token, and keep this redirect URI exact: ${redirect}`,
+        );
+      }
+      throw new Error(detail);
+    }
+    const me = await fetch(`${PINTEREST_API}/v5/user_account`, {
       headers: { Authorization: `Bearer ${json.access_token}` },
     });
     const profile = (await me.json()) as { username?: string; id?: string };
@@ -337,6 +399,7 @@ export async function finishOauth(platform: SocialPlatform, req: Request) {
       accessToken: json.access_token,
       refreshToken: json.refresh_token,
       tokenExpiry: json.expires_in ? new Date(Date.now() + json.expires_in * 1000).toISOString() : undefined,
+      scopes: (json.scope || PINTEREST_SCOPE).split(/[\s,]+/).filter(Boolean),
       connectionState: "connected",
       auditStatus: "unaudited",
       lastError: undefined,

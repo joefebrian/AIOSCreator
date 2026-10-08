@@ -1,0 +1,17 @@
+PASS productions tab shows the recipe gate
+PASS one production — 1
+PASS factory row shows the recipe gate
+PASS status tab is present
+PASS brief separates shop and affiliate
+PASS brief records that Jev was not called
+PASS brief shows the media id
+PASS script tab says Astra was not called
+PASS render tab has no video and the actions were not used
+PASS reference shows the benchmark hash
+PASS escape restores the row focus
+PASS create dialog uses the catalog picker
+PASS campaigns shows the shared picker
+PASS campaign picker has no placement field
+PASS products mobile overflow — 0
+PASS detail mobile overflow — 0
+PASS factory mobile overflow — 0

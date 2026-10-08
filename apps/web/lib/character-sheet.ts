@@ -50,3 +50,26 @@ export async function composeCharacterSheet(paths: string[], dest: string) {
   await run(["-y", ...ins, "-filter_complex", chain, "-map", "[out]", dest]);
   if (!fs.existsSync(dest)) throw new Error("sheet was not written");
 }
+
+/** Side-by-side FACE | FULL BODY identity lock for Studio (one image, two plates). */
+export async function composeIdentitySheet(headPath: string, bodyPath: string, dest: string) {
+  if (!fs.existsSync(headPath) || !fs.existsSync(bodyPath)) throw new Error("need headshot and full body");
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  const cellW = 384;
+  const cellH = 512;
+  await run([
+    "-y",
+    "-i",
+    headPath,
+    "-i",
+    bodyPath,
+    "-filter_complex",
+    `[0:v]scale=${cellW}:${cellH}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${cellW}:${cellH}:(ow-iw)/2:(oh-ih)/2:black[s0];` +
+      `[1:v]scale=${cellW}:${cellH}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${cellW}:${cellH}:(ow-iw)/2:(oh-ih)/2:black[s1];` +
+      `[s0][s1]hstack=inputs=2[out]`,
+    "-map",
+    "[out]",
+    dest,
+  ]);
+  if (!fs.existsSync(dest)) throw new Error("identity sheet was not written");
+}

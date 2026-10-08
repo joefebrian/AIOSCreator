@@ -23,6 +23,8 @@ type Store = {
   revampOr?: LlmProvider | null;
   /** @deprecated migrated into revampLm / revampOr */
   revamp?: LlmProvider | null;
+  /** TypeSafe Jev via OpenRouter Decisions API — not a chat LLM. */
+  jev?: { apiKey: string; model: string; createdAt: string };
 };
 
 export const PRESETS: {
@@ -213,6 +215,13 @@ export function activeProvider(): LlmProvider | undefined {
   return store.providers.find((p) => p.id === store.activeId);
 }
 
+/** OpenRouter key even if Revamp mode is LM Studio. */
+export function openRouterAccount(): LlmProvider | undefined {
+  const store = readStore();
+  if (store.revampOr?.apiKey) return store.revampOr;
+  return store.providers.find((p) => (p.baseURL || "").includes("openrouter.ai") && p.apiKey);
+}
+
 export function revampProvider(): LlmProvider | undefined {
   const store = readStore();
   if (store.revampMode === "lmstudio") return store.revampLm || undefined;
@@ -312,4 +321,31 @@ export function clearRevamp() {
   const store = readStore();
   store.revampMode = null;
   writeStore(store);
+}
+
+export function jevConfig() {
+  const store = readStore();
+  const apiKey =
+    (store.jev?.apiKey || "").trim() ||
+    (process.env.OPENROUTER_API_KEY || "").trim() ||
+    (openRouterAccount()?.apiKey || "").trim();
+  return {
+    apiKey,
+    model: store.jev?.model || "typesafe/jev-1.13",
+    keyHint: maskKey(apiKey),
+    ready: Boolean(apiKey),
+  };
+}
+
+export function saveJevKey(apiKey: string, model = "typesafe/jev-1.13") {
+  const key = apiKey.trim();
+  if (!key) throw new Error("OpenRouter key required for Jev");
+  const store = readStore();
+  store.jev = {
+    apiKey: key,
+    model,
+    createdAt: store.jev?.createdAt || new Date().toISOString(),
+  };
+  writeStore(store);
+  return jevConfig();
 }

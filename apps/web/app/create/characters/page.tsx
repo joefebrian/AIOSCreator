@@ -3,19 +3,23 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
+import { Plus } from "lucide-react";
 import { EmptyState, Page, Pill } from "@/components/ui";
+import { MARKETS } from "@/lib/markets";
 import { thumbSrc } from "@/lib/media-url";
 
 type LiteCharacter = {
   id: string;
   name: string;
   identityUrl: string | null;
+  thumbUrl?: string | null;
   identityUpscaled?: boolean;
   updatedAt: string;
   stills: number;
   edits: number;
   hasSheet?: boolean;
   followers?: number;
+  markets?: string[];
 };
 
 export default function CharactersPage() {
@@ -54,15 +58,16 @@ function CharactersInner() {
       title="Character library"
       description={
         product
-          ? "Pick a character for this SKU. Affiliate video = script (Qwen 3.7 Plus) → still → clip."
-          : "Talent objects. Affiliate video is on the character, not UGC Factory."
+          ? "Pick a talent for this SKU."
+          : "Click a face to open the workspace."
       }
       actions={
         <Link
           href="/create/characters/new"
-          className="inline-flex items-center rounded-xl bg-[#652DFF] px-3.5 py-2 text-[13px] font-semibold text-white"
+          className="inline-flex items-center gap-1.5 rounded-full border border-[#E6E8EE] bg-white px-3 py-1.5 text-[13px] font-semibold text-[#0B0F2B] hover:border-[#652DFF]/50"
         >
-          New character
+          <Plus size={14} />
+          New
         </Link>
       }
     >
@@ -82,7 +87,7 @@ function CharactersInner() {
 
       {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
 
-      <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
         {rows === null ? (
           [0, 1, 2, 3].map((i) => (
             <div key={i} className="h-[22rem] animate-pulse rounded-2xl bg-white ring-1 ring-[#E6E8EE]" />
@@ -120,13 +125,13 @@ function CharactersInner() {
               <Link
                 key={c.id}
                 href={href}
-                className="group overflow-hidden rounded-2xl border border-[#E6E8EE] bg-white shadow-[0_1px_0_rgba(15,23,42,0.03)] transition hover:-translate-y-0.5 hover:border-[#652DFF]/45 hover:shadow-md"
+                className="group overflow-hidden rounded-xl border border-[#E6E8EE] bg-white transition hover:-translate-y-0.5 hover:border-[#652DFF]/45 hover:shadow-sm"
               >
                 <div className="relative aspect-[3/4] bg-[#F3F4F8]">
-                  {c.identityUrl ? (
+                  {c.thumbUrl || c.identityUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={thumbSrc(c.identityUrl, 480, c.updatedAt)}
+                      src={thumbSrc(c.thumbUrl || c.identityUrl || "", 480, c.updatedAt)}
                       alt=""
                       loading="lazy"
                       decoding="async"
@@ -150,18 +155,30 @@ function CharactersInner() {
                     <p className="text-[12px] font-semibold text-white">{locked ? "Open workspace" : "Finish identity"}</p>
                   </div>
                 </div>
-                <div className="p-3">
-                  <p className="truncate font-semibold text-[#0B0F2B]">{c.name}</p>
-                  <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[#6B7280]">
+                <div className="px-2 py-2">
+                  <p className="truncate text-[13px] font-semibold text-[#0B0F2B]">{c.name}</p>
+                  <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[10px] text-[#6B7280]">
                     <span>{n} stills</span>
                     {edits ? <span>· {edits} edits</span> : null}
                     {fol ? <span>· {fol.toLocaleString()} flw</span> : null}
+                    <span>· {(c.markets || []).map((id) => MARKETS.find((market) => market.id === id)?.label || id).join(", ") || "Set country"}</span>
                   </p>
                 </div>
               </Link>
             );
           })
         )}
+        {rows && rows.length > 0 ? (
+          <Link
+            href="/create/characters/new"
+            className="flex aspect-[3/4] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[#D1D5DB] bg-[#FAFAFC] text-[#6B7280] transition hover:border-[#652DFF]/50 hover:text-[#652DFF]"
+          >
+            <span className="grid h-9 w-9 place-items-center rounded-full border border-current">
+              <Plus size={16} />
+            </span>
+            <span className="text-[12px] font-semibold">New character</span>
+          </Link>
+        ) : null}
       </div>
     </Page>
   );

@@ -1,5 +1,109 @@
 /** Identity plate: skin texture first. LOCK a real photo still beats this GEN.
  *  Operator prompt is uncensored for adult fictional / consented adults. No SFW filter. */
+/** AI Studio compose: character wears the locked SKU. Deterministic — no LLM. */
+export function studioImagePrompt(opts: {
+  character?: string;
+  characters?: string[];
+  product?: string;
+  camera?: string;
+  place?: string;
+  light?: string;
+  style?: string;
+  /** @deprecated pass camera / place instead */
+  scene?: string;
+  aspect?: string;
+  sheet?: boolean;
+}) {
+  const names = (opts.characters?.length ? opts.characters : [opts.character || ""])
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const character = names[0] || "";
+  const product = (opts.product || "").trim();
+  const camera = (opts.camera || "").trim();
+  const place = (opts.place || "").trim();
+  const light = (opts.light || "").trim();
+  const style = (opts.style || "").trim();
+  const leftover = (opts.scene || "").trim();
+  const aspect = (opts.aspect || "9:16").trim();
+  const set =
+    [
+      camera ? `CAMERA: ${camera}` : "",
+      place,
+      light,
+      style,
+      !camera && !place && leftover ? leftover : "",
+    ]
+      .filter(Boolean)
+      .join(". ") || "editorial lookbook, garment-first, even catalog light, full outfit in frame";
+  if (names.length > 1 && product) {
+    return [
+      `Photoreal ${aspect} GROUP lookbook: ${names.length} women in one frame — ${names.join(", ")}.`,
+      `Each wears the exact ${product} as her only outfit — same color, cut, fabric, logos.`,
+      `Keep every face distinct and matching the identity refs. Do not merge faces. Do not drop anyone.`,
+      `SKIN LOCK: keep each woman's exact skin tone from her identity ref. Do not copy the product model's tan, undertone, or ethnicity.`,
+      `Full outfits visible, standing together, knees-up or 3/4, closed mouths.`,
+      `Unretouched skin. ${set}. No watermark.`,
+    ].join(" ");
+  }
+  if (character && product) {
+    const identity = opts.sheet
+      ? `Image 1 is a two-panel identity sheet of ${character}: LEFT is her FACE, RIGHT is her FULL BODY. Same woman. Keep that face, hair, body shape, and skin. Output ONE photograph — not a split screen, not a diptych, not two panels.`
+      : `Image 1 is ${character} — FACE + SKIN + HAIR lock. Keep her exact face, undertone, and identity. Do not bleach, tan, or change ethnicity.`;
+    return [
+      identity,
+      `Image 2 is the GARMENT only: ${product}. Transfer the clothes (color, cut, fabric, logos) onto Image 1. Ignore the model in Image 2 — not her face, not her skin, not her tan, not her body.`,
+      `Do not keep Image 1's original clothes. Do not invent a different garment. Do not hold a hanger or a second copy.`,
+      `Photoreal ${aspect} on-model still, product fully visible and readable, knees-up or 3/4, closed mouth, one person.`,
+      `Unretouched skin (pores, no glass skin). ${set}. No watermark.`,
+    ].join(" ");
+  }
+  if (product) {
+    return `Photoreal ${aspect} pack/hero of the exact ${product}. Full garment visible, true color and labels, no face. ${set}. No watermark.`;
+  }
+  if (character) {
+    return `Photoreal ${aspect} of ${character}. Unretouched skin, closed mouth, one person. ${set}. No watermark.`;
+  }
+  return "";
+}
+
+export function studioVideoPrompt(opts: {
+  character?: string;
+  characters?: string[];
+  product?: string;
+  scene?: string;
+  aspect?: string;
+  durationSec?: number;
+}) {
+  const names = (opts.characters?.length ? opts.characters : [opts.character || ""])
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const product = (opts.product || "").trim();
+  const aspect = (opts.aspect || "9:16").trim();
+  const sec = Math.max(4, Math.min(15, opts.durationSec || 6));
+  const garment = product || "the locked garment";
+  const scene = (opts.scene || "").trim();
+  const cam = scene ? `CAMERA: ${scene}.` : `CAMERA: locked-off static ${aspect}.`;
+  if (names.length > 1) {
+    return [
+      `${cam} ${sec}s UGC. ${names.length} women stay in frame the whole clip: ${names.join(", ")}.`,
+      `Each wears the exact ${garment}. Product readable. Do not drop anyone. Same faces as the still.`,
+      `0-2s group inhale, settle, look to camera.`,
+      `2-4s small weight shift / one hand on garment.`,
+      `4-${sec}s hold, micro-glance, settle.`,
+      `No walk-off, no new people, no outfit change, no watermark.`,
+    ].join(" ");
+  }
+  const who = names[0] || "the locked character";
+  return [
+    `${cam} ${sec}s UGC of ${who} wearing the exact ${garment}. Same single person as the still.`,
+    `Do not add extra people. Do not change identity or skin tone. Product stays readable.`,
+    `0-2s FIRST FRAME sells the hook before anyone reads: product or action already in frame.`,
+    `2-4s slight head tilt or weight shift, hand rests on garment.`,
+    `4-${sec}s hold and settle.`,
+    `Natural editorial motion only. No walk-off, no new outfit, no watermark.`,
+  ].join(" ");
+}
+
 export const IDENTITY_PLATE_PROMPT =
   "Unretouched photoreal FACE LOCK headshot, shoulders-up, one woman, one face, looking at camera. Not full-body, not 3/4 body, not a lookbook. Head and shoulders only, 3:4 crop. Visible pores on nose and cheeks, peach fuzz, fine vellus hair, slight redness and uneven tone, natural oil sheen, micro-asymmetry. Flyaway hairs, real catchlights. No glass skin, no Facetune, no K-beauty retouch, no porcelain, no CGI. Soft studio light, no product, no watermark, no extra limbs.";
 
@@ -35,22 +139,32 @@ export const FACE_BODY_SCENE_LOCK =
 export const FACE_ONLY_SCENE_LOCK =
   `Keep this exact face. ${SKIN_LOCK} Image 1 is the FACE lock (headshot): same face, skin tone, age, hair, eyes, bone structure. Do NOT copy crop, camera, or pose from the headshot. Pose, wardrobe, lighting, scene, and framing follow the operator prompt only. Unretouched photoreal face: pores on nose and cheeks, peach fuzz, slight uneven tone, no glass skin, no Facetune.`;
 
-/** Clone Image: identity from Image 1, outfit from Image 2. Pose default = illustration; optional text overrides pose. */
+/** Clone Image: 3 refs. Scene is always clean studio — never the look background. */
 export const POSE_LOOK_REAL_BASE = [
-  "Exactly ONE unretouched photoreal woman. Solo photograph. Never two people, never a collage, never a giant floating head, never paste the illustrated character into the frame. Face: pores, peach fuzz, no glass skin.",
-  "Image 1 is the locked character: keep her face, skin, hair, body shape, and identity.",
-  "Image 2 is the LOOK: copy garments, colors, cut, accessories, and props as real fabric onto Image 1's person.",
-  "Do NOT draw Image 2 as a second person. Do not keep Image 1's original clothes.",
-  "Zero anime. Zero extra faces. Exactly two arms.",
+  "Exactly ONE unretouched photoreal woman. Solo photograph. Never two people, never a collage, never a giant floating head. Face: pores, peach fuzz, no glass skin.",
+  "Image 1 is FACE + HAIR of the locked character. Keep identity. Do not copy Image 1's clothes.",
+  "Image 2 is BODY SHAPE of the locked character (physique, proportions, hands, feet). Not pose unless told. Not clothes.",
+  "Image 3 is the LOOK / outfit sheet — photo or illustration. Recast those garments as photoreal fabric on this person (colors, cut, cape, belt, shoes, jewelry). Ignore Image 3's face, body, and background. Do not skip Image 3 because it is drawn.",
+  "BACKGROUND: seamless clean studio, even catalog light, white or light gray cyclorama. Do not copy Image 3's scene, room, street, or extra people.",
+  "CRITICAL: replace Image 1 and Image 2 clothes entirely. No striped tank, no black shorts from the identity plates. Zero extra faces. Exactly two arms.",
 ].join(" ");
 
 export const POSE_LOOK_REAL_FOLLOW_LOOK =
-  "POSE DEFAULT: match Image 2's pose, stance, gesture, and how they hold any prop. Do not keep Image 1's stiff catalog stance if Image 2 is posed differently.";
+  "POSE: match Image 3's pose, stance, gesture, and how they hold any prop. Keep Image 2's body shape. Do not copy Image 2's catalog stance. Do not copy Image 3's background.";
+
+export const POSE_LOOK_REAL_FOLLOW_CHARACTER =
+  "POSE: match Image 2's stance and crop (our character's body plate). Do not copy Image 3's pose, gesture, or camera. Image 3 is clothing only.";
 
 export const POSE_LOOK_REAL_FOLLOW_TEXT =
-  "POSE OVERRIDE: ignore Image 2's pose. Pose, camera, and action follow the operator text only. Image 2 remains clothing and props, not body pose.";
+  "POSE OVERRIDE: ignore Image 3's pose. Pose, camera, and action follow the operator text only. Image 3 remains clothing and props, not body pose.";
 
-export const POSE_LOOK_REAL_PROMPT = `${POSE_LOOK_REAL_BASE} ${POSE_LOOK_REAL_FOLLOW_LOOK}`;
+export const POSE_LOOK_REAL_OPERATOR =
+  "If the operator names a pose, camera, or gesture, follow that text (it wins over Image 2's catalog stance). If they name a place, lighting, or background, use that scene — do not force the studio cyclorama. Image 3 remains the outfit only; do not copy Image 3's location unless the operator asks.";
+
+/** @deprecated unused — Clone pose is character vs look, not free editorial. */
+export const POSE_LOOK_REAL_DEFAULT_POSE = POSE_LOOK_REAL_FOLLOW_CHARACTER;
+
+export const POSE_LOOK_REAL_PROMPT = `${POSE_LOOK_REAL_BASE} ${POSE_LOOK_REAL_FOLLOW_CHARACTER}`;
 
 /** Canonical physique plate, generated once from the face lock. */
 export const BODY_LOCK_PROMPT =

@@ -14,11 +14,15 @@ const COPY: Record<string, { title: string; body: string }> = {
   },
   "/create/ugc-factory": {
     title: "UGC Factory",
-    body: "Factory: product → script → still → clip → VoiceStudio VO (queues behind GPU jobs) → Calendar. Faceless VO is OpenAI /v1/audio/speech on :3900.",
+    body: "SKU → Write → still → clip.",
   },
   "/commerce/products": {
     title: "Products",
     body: "Amazon is the first provider (COM-01). Paste a URL to seed a Product + script. Full normalize/score is later.",
+  },
+  "/commerce/campaigns": {
+    title: "Campaigns",
+    body: "Product lists, tags, assignment. Not a generator folder.",
   },
   "/create/studio": {
     title: "AI Studio",
@@ -30,7 +34,7 @@ const COPY: Record<string, { title: string; body: string }> = {
   },
   "/create/characters": {
     title: "Characters",
-    body: "Lock identity, then open the character workspace: stills, stage, and motion in one board. Z-Image / Qwen local, or GPT Image / Seedream if keyed.",
+    body: "Talent roster. Identity lock first, then workspace (stills → stage → clip). Click a face.",
   },
   "/create/short-drama": {
     title: "ShortDrama",
@@ -59,6 +63,83 @@ const RESEARCH_NEXT = [
   { href: "/intelligence/opportunities", label: "Opportunities", note: "Scored SKUs + topics. Pin and exclude." },
   { href: "/grow/analytics", label: "Winner hooks", note: "Scripts and motion lines. Pin a winner." },
 ];
+
+function CharacterRoster() {
+  const [rows, setRows] = useState<
+    { id: string; name: string; identityUrl: string | null; thumbUrl?: string | null; stills: number; edits: number }[]
+  >([]);
+
+  useEffect(() => {
+    fetch("/api/characters?lite=1")
+      .then((r) => r.json())
+      .then((j) => setRows((j.characters || []) as typeof rows))
+      .catch(() => undefined);
+  }, []);
+
+  const ready = rows.filter((c) => c.identityUrl).length;
+
+  return (
+    <div className="mt-5 border-t border-[#E6E8EE] pt-4">
+      <p className="text-[10px] font-semibold tracking-[0.16em] text-[#9CA3AF]">ROSTER</p>
+      <p className="mt-1 text-[12px] text-[#6B7280]">
+        {rows.length ? `${ready} locked · ${rows.length} total` : "Loading…"}
+      </p>
+      <div className="mt-3 space-y-1.5">
+        {rows.map((c) => (
+          <Link
+            key={c.id}
+            href={
+              c.identityUrl
+                ? `/create/characters/${c.id}/workspace?tool=generate-image`
+                : `/create/characters/${c.id}`
+            }
+            className="flex items-center gap-2 rounded-lg border border-[#E6E8EE] px-2 py-1.5 hover:border-[#652DFF]/40"
+          >
+            {c.thumbUrl || c.identityUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={thumbSrc(c.thumbUrl || c.identityUrl || "", 80)}
+                alt=""
+                className="h-9 w-9 shrink-0 rounded-md object-cover"
+              />
+            ) : (
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#F3F4F8] text-[9px] text-[#9CA3AF]">
+                —
+              </span>
+            )}
+            <span className="min-w-0">
+              <span className="block truncate text-[12px] font-semibold">{c.name}</span>
+              <span className="text-[10px] text-[#9CA3AF]">
+                {c.stills} stills{c.edits ? ` · ${c.edits} edits` : ""}
+              </span>
+            </span>
+          </Link>
+        ))}
+      </div>
+      <p className="mt-5 text-[10px] font-semibold tracking-[0.16em] text-[#9CA3AF]">NEXT</p>
+      <ul className="mt-2 space-y-2">
+        <li>
+          <Link href="/create/characters/new" className="block rounded-lg border border-[#E6E8EE] px-2.5 py-2 hover:border-[#652DFF]/40">
+            <p className="text-[12px] font-semibold">New character</p>
+            <p className="mt-0.5 text-[11px] leading-relaxed text-[#6B7280]">Drop a face, lock identity, then workspace.</p>
+          </Link>
+        </li>
+        <li>
+          <Link href="/create/studio" className="block rounded-lg border border-[#E6E8EE] px-2.5 py-2 hover:border-[#652DFF]/40">
+            <p className="text-[12px] font-semibold">AI Studio</p>
+            <p className="mt-0.5 text-[11px] leading-relaxed text-[#6B7280]">On-model stills: lock talent + SKU, then GEN.</p>
+          </Link>
+        </li>
+        <li>
+          <Link href="/commerce/products" className="block rounded-lg border border-[#E6E8EE] px-2.5 py-2 hover:border-[#652DFF]/40">
+            <p className="text-[12px] font-semibold">Products</p>
+            <p className="mt-0.5 text-[11px] leading-relaxed text-[#6B7280]">Import a SKU, then pick a character for affiliate.</p>
+          </Link>
+        </li>
+      </ul>
+    </div>
+  );
+}
 
 function ResearchLibrary() {
   const [rows, setRows] = useState<ResearchExtractRow[]>([]);
@@ -152,6 +233,124 @@ function ResearchLibrary() {
   );
 }
 
+function DistributePane({ path }: { path: string }) {
+  const [accounts, setAccounts] = useState<
+    { id: string; platform: string; accountName: string; handle?: string; hasToken: boolean }[]
+  >([]);
+  const [posts, setPosts] = useState<
+    { id: string; accountId: string; platform: string; caption: string; status: string; approval: string; scheduledAt?: string }[]
+  >([]);
+
+  useEffect(() => {
+    let stop = false;
+    async function load() {
+      try {
+        const res = await fetch("/api/distribute/posts");
+        const json = await res.json();
+        if (stop) return;
+        setAccounts(json.accounts || []);
+        setPosts(json.posts || []);
+      } catch {
+        /* the page surfaces its own error */
+      }
+    }
+    void load();
+    const timer = setInterval(() => void load(), 20000);
+    return () => {
+      stop = true;
+      clearInterval(timer);
+    };
+  }, [path]);
+
+  const needs = posts.filter((p) => p.approval !== "approved" && p.status !== "published" && p.status !== "exported").length;
+  const scheduled = posts.filter((p) => p.status === "scheduled" || p.status === "draft").length;
+  const failed = posts.filter((p) => p.status === "failed").length;
+  const upcoming = posts.filter((p) => p.status === "scheduled" || p.status === "draft" || p.status === "failed").slice(0, 8);
+  const links = [
+    { href: "/distribute/calendar", label: "Calendar" },
+    { href: "/distribute/queue", label: "Publish" },
+    { href: "/distribute/accounts", label: "Accounts" },
+  ];
+
+  return (
+    <div className="mt-5 flex flex-1 flex-col border-t border-[#E6E8EE] pt-4">
+      <p className="text-[10px] font-semibold tracking-[0.16em] text-[#9CA3AF]">LOGINS</p>
+      {accounts.length === 0 ? (
+        <p className="mt-2 text-[12px] leading-relaxed text-[#9CA3AF]">No logins yet.</p>
+      ) : (
+        <ul className="mt-2 space-y-1.5">
+          {accounts.map((a) => (
+            <li key={a.id}>
+              <Link href="/distribute/accounts" className="flex items-center justify-between gap-2 rounded-lg border border-[#E6E8EE] px-2.5 py-2 hover:border-[#652DFF]/40">
+                <span className="min-w-0">
+                  <span className="block truncate text-[12px] font-semibold">{a.handle ? `@${a.handle}` : a.accountName}</span>
+                  <span className="text-[10px] text-[#9CA3AF]">{a.platform}</span>
+                </span>
+                <span className={a.hasToken ? "text-[10px] font-semibold text-[#15803D]" : "text-[10px] font-semibold text-[#9CA3AF]"}>
+                  {a.hasToken ? "on" : "off"}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <p className="mt-5 text-[10px] font-semibold tracking-[0.16em] text-[#9CA3AF]">QUEUE</p>
+      <div className="mt-2 grid grid-cols-3 gap-1.5">
+        {[
+          { href: "/distribute/queue?filter=needs", n: needs, label: "Approve" },
+          { href: "/distribute/queue?filter=scheduled", n: scheduled, label: "Due" },
+          { href: "/distribute/queue?filter=failed", n: failed, label: "Failed" },
+        ].map((item) => (
+          <Link key={item.label} href={item.href} className="rounded-lg border border-[#E6E8EE] px-2 py-2 text-center hover:border-[#652DFF]/40">
+            <span className="block text-[15px] font-bold">{item.n}</span>
+            <span className="text-[10px] text-[#6B7280]">{item.label}</span>
+          </Link>
+        ))}
+      </div>
+
+      <p className="mt-5 text-[10px] font-semibold tracking-[0.16em] text-[#9CA3AF]">UP NEXT</p>
+      {upcoming.length === 0 ? (
+        <p className="mt-2 text-[12px] leading-relaxed text-[#9CA3AF]">Nothing scheduled.</p>
+      ) : (
+        <ul className="mt-2 space-y-1.5">
+          {upcoming.map((p) => {
+            const who = accounts.find((a) => a.id === p.accountId);
+            return (
+              <li key={p.id}>
+                <Link href={`/distribute/queue?post=${p.id}`} className="block rounded-lg border border-[#E6E8EE] px-2.5 py-2 hover:border-[#652DFF]/40">
+                  <span className="block truncate text-[12px] font-semibold">
+                    {who?.handle ? `@${who.handle}` : p.platform}
+                    <span className="font-normal text-[#9CA3AF]"> · {p.status}</span>
+                  </span>
+                  <span className="mt-0.5 block truncate text-[11px] text-[#6B7280]">
+                    {p.scheduledAt ? `${new Date(p.scheduledAt).toLocaleString()} · ` : ""}
+                    {p.caption || "No caption"}
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <p className="mt-5 text-[10px] font-semibold tracking-[0.16em] text-[#9CA3AF]">PAGES</p>
+      <ul className="mt-2 space-y-1.5">
+        {links.map((item) => (
+          <li key={item.href}>
+            <Link
+              href={item.href}
+              className={`block rounded-lg border px-2.5 py-2 text-[12px] font-semibold hover:border-[#652DFF]/40 ${path === item.href ? "border-[#652DFF] bg-[#F6F3FF] text-[#3B1D9A]" : "border-[#E6E8EE]"}`}
+            >
+              {item.label}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function Inspector() {
   const path = usePathname();
   const gpu = useGpu();
@@ -165,7 +364,7 @@ export function Inspector() {
       : path.startsWith("/distribute")
         ? {
             title: "Distribute",
-            body: "Official connectors only. YouTube first. Export pack if APIs block.",
+            body: "Connected logins publish. Pinterest direct is a still. Export pack if the API cannot post.",
           }
         : path.startsWith("/grow")
           ? {
@@ -183,8 +382,8 @@ export function Inspector() {
               });
 
   return (
-    <aside className="sticky top-[49px] flex h-[calc(100vh-49px)] w-[288px] shrink-0 flex-col overflow-y-auto border-l border-[#E6E8EE] bg-white">
-      <div className="flex items-center justify-between border-b border-[#E6E8EE] px-4 py-2.5">
+    <aside className="sticky top-0 flex h-full w-[288px] shrink-0 flex-col overflow-y-auto border-l border-[#E6E8EE] bg-white">
+      <div className="flex shrink-0 items-center justify-between border-b border-[#E6E8EE] px-4 py-2.5">
         <span className="text-[10px] font-semibold tracking-[0.16em] text-[#9CA3AF]">STATUS</span>
         <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#6B7280]">
           <span
@@ -195,11 +394,13 @@ export function Inspector() {
           {gpu.busy ? `Busy · ${gpu.label}` : gpu.online ? "GPU ready" : gpu.online === false ? "GPU off" : "GPU"}
         </span>
       </div>
-      <div className="px-5 py-5">
+      <div className="flex min-h-0 flex-1 flex-col px-5 py-5">
         <p className="text-[10px] font-semibold tracking-[0.16em] text-[#9CA3AF]">THIS PAGE</p>
         <h2 className="mt-2 text-[15px] font-bold tracking-tight">{hit.title}</h2>
         <p className="mt-2 text-[13px] leading-relaxed text-[#4B5563]">{hit.body}</p>
+        {path.startsWith("/distribute") ? <DistributePane path={path} /> : null}
         {path.startsWith("/intelligence/research") ? <ResearchLibrary /> : null}
+        {path === "/create/characters" || path.startsWith("/create/characters/") ? <CharacterRoster /> : null}
       </div>
     </aside>
   );

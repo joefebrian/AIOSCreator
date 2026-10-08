@@ -11,6 +11,7 @@ import type { Character } from "@/lib/character-types";
 import { cn } from "@/lib/cn";
 import { Page } from "@/components/ui";
 import { pollJob, readJson } from "@/lib/http";
+import { CountryChips } from "@/components/CountryChips";
 import { AspectPicker } from "@/components/AspectPicker";
 import { compileInfluencerPrompt, type InfluencerSpec } from "@/lib/influencer";
 
@@ -18,6 +19,7 @@ export default function NewCharacterPage() {
   const router = useRouter();
   const [mode, setMode] = useState<"generator" | "upload">("generator");
   const [name, setName] = useState("");
+  const [markets, setMarkets] = useState<string[]>([]);
   const [spec, setSpec] = useState<InfluencerSpec>(DEFAULT_INFLUENCER);
   const [prompt, setPrompt] = useState(TRANSFORM_PLATE_PROMPT);
   const [file, setFile] = useState<File | null>(null);
@@ -48,6 +50,7 @@ export default function NewCharacterPage() {
         name,
         source: file || faceFile ? "transform" : "prompt",
         sourcePrompt,
+        markets,
       }),
     });
     const json = await readJson<Character & { error?: string }>(created);
@@ -199,6 +202,24 @@ export default function NewCharacterPage() {
           className="mt-1 w-full rounded-lg border border-[#E6E8EE] bg-white px-3 py-2 text-sm outline-none"
         />
       </label>
+      <div className="mt-4 max-w-3xl">
+        <p className="text-[12px] font-semibold text-[#6B7280]">Country</p>
+        <p className="mt-1 text-[12px] text-[#6B7280]">Countries this person can join on a campaign.</p>
+        <div className="mt-1.5">
+          <CountryChips
+            value={markets}
+            onChange={(next) => {
+              setMarkets(next);
+              if (!row) return;
+              void fetch(`/api/characters/${row.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ markets: next }),
+              });
+            }}
+          />
+        </div>
+      </div>
 
       <div className="mt-6 grid max-w-3xl gap-3 sm:grid-cols-2">
         <button

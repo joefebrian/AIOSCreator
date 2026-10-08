@@ -3,6 +3,7 @@ import {
   deleteSocialAccount,
   listSocialAccounts,
   publicAccount,
+  publicApps,
   saveSocialApps,
   socialApps,
   upsertSocialAccount,
@@ -17,7 +18,7 @@ const PLATFORMS = SOCIAL_PLATFORMS;
 
 export async function GET() {
   return NextResponse.json({
-    apps: socialApps(),
+    apps: publicApps(),
     accounts: listSocialAccounts().map(publicAccount),
   });
 }
@@ -42,13 +43,27 @@ export async function POST(req: Request) {
   };
   if (body.action === "apps") {
     const cur = socialApps();
-    const merge = (key: "youtube" | "tiktok" | "instagram" | "threads" | "x" | "pinterest") => ({
-      clientId: body.apps?.[key]?.clientId ?? cur[key]?.clientId ?? "",
-      clientSecret: body.apps?.[key]?.clientSecret ?? cur[key]?.clientSecret ?? "",
-      redirectUri: body.apps?.[key]?.redirectUri ?? cur[key]?.redirectUri ?? "",
-    });
+    const pinSecret = body.apps?.pinterest?.clientSecret?.trim();
+    if (pinSecret && /^pin[acr]_/i.test(pinSecret)) {
+      return NextResponse.json(
+        {
+          error:
+            "Pinterest client secret is an access token (pina_). Paste the App secret key from the app Configure page, not Generate token.",
+        },
+        { status: 400 },
+      );
+    }
+    const text = (value: string | undefined, fallback = "") => (value ?? fallback).trim();
+    const merge = (key: "youtube" | "tiktok" | "instagram" | "threads" | "x" | "pinterest") => {
+      const incomingSecret = body.apps?.[key]?.clientSecret?.trim() || "";
+      return {
+        clientId: text(body.apps?.[key]?.clientId, cur[key]?.clientId ?? ""),
+        clientSecret: incomingSecret || cur[key]?.clientSecret || "",
+        redirectUri: text(body.apps?.[key]?.redirectUri, cur[key]?.redirectUri ?? ""),
+      };
+    };
     const apps = saveSocialApps({
-      publicBaseUrl: body.apps?.publicBaseUrl ?? cur.publicBaseUrl,
+      publicBaseUrl: text(body.apps?.publicBaseUrl, cur.publicBaseUrl ?? "") || undefined,
       youtube: merge("youtube"),
       tiktok: merge("tiktok"),
       instagram: merge("instagram"),
@@ -56,7 +71,7 @@ export async function POST(req: Request) {
       x: merge("x"),
       pinterest: merge("pinterest"),
     });
-    return NextResponse.json({ apps, accounts: listSocialAccounts().map(publicAccount) });
+    return NextResponse.json({ apps: publicApps(apps), accounts: listSocialAccounts().map(publicAccount) });
   }
   if (body.action === "delete" && body.id) {
     if (!deleteSocialAccount(body.id)) return NextResponse.json({ error: "not found" }, { status: 404 });

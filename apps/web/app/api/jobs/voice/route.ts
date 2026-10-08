@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import { after, NextResponse } from "next/server";
 import { waitForGpuIdle } from "@/lib/gpu-gate";
+import { isFactoryMediaUrl, menuAsset } from "@/lib/media-menu";
 import { mediaUrlToPath, motionFile } from "@/lib/paths";
 import { insertJob, updateJob, type Job } from "@/lib/store";
 import { muxVoiceOntoClip } from "@/lib/voice-mux";
@@ -17,6 +18,7 @@ export async function POST(req: Request) {
     clipUrl?: string;
     productId?: string;
     characterId?: string;
+    source?: "studio" | "workspace" | "ugc-factory";
   };
   const text = (body.text || "").trim();
   if (!text) return NextResponse.json({ error: "voiceover text is empty" }, { status: 400 });
@@ -35,6 +37,7 @@ export async function POST(req: Request) {
     progress: "Queued — waiting for GPU…",
     productId: body.productId,
     characterId: body.characterId,
+    source: body.source === "ugc-factory" ? "ugc-factory" : body.source,
   };
   insertJob(job);
   const jobId = job.id;
@@ -49,18 +52,20 @@ export async function POST(req: Request) {
       });
       updateJob(jobId, { status: "running", progress: "VoiceStudio /v1/audio/speech…" });
       const buf = await voiceStudioSpeech(text, voice || undefined);
-      const wav = voiceFile(jobId, "wav");
+      const factory = job.source === "ugc-factory" || isFactoryMediaUrl(clipUrl);
+      const wavAsset = factory ? menuAsset("ugc-factory", jobId, "wav") : null;
+      const wav = wavAsset?.path || voiceFile(jobId, "wav");
       fs.writeFileSync(wav, buf);
       let mediaPath = wav;
-      let mediaUrl = voiceMediaUrl(jobId, "wav");
+      let mediaUrl = wavAsset?.url || voiceMediaUrl(jobId, "wav");
       if (clipUrl) {
         const clipPath = mediaUrlToPath(clipUrl);
         if (fs.existsSync(clipPath)) {
           updateJob(jobId, { progress: "Muxing VO onto clip…" });
-          const dest = motionFile(`${jobId}-vo`);
-          await muxVoiceOntoClip(clipPath, wav, dest);
-          mediaPath = dest;
-          mediaUrl = `/api/media/motion/${jobId}-vo.mp4`;
+          const mux = factory ? menuAsset("ugc-factory", `${jobId}-vo`, "mp4") : { path: motionFile(`${jobId}-vo`), url: `/api/media/motion/${jobId}-vo.mp4` };
+          await muxVoiceOntoClip(clipPath, wav, mux.path);
+          mediaPath = mux.path;
+          mediaUrl = mux.url;
         }
       }
       updateJob(jobId, {

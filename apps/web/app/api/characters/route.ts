@@ -15,6 +15,7 @@ export async function POST(req: Request) {
     name?: string;
     source?: string;
     sourcePrompt?: string;
+    markets?: unknown;
   };
   const source = SOURCES.includes(body.source as CharacterSource)
     ? (body.source as CharacterSource)
@@ -23,6 +24,7 @@ export async function POST(req: Request) {
     name: body.name,
     source,
     sourcePrompt: body.sourcePrompt,
+    markets: body.markets,
   });
   return NextResponse.json(row, { status: 201 });
 }

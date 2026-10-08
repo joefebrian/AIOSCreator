@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { dataRoot, ensureDataDirs } from "./paths";
 
-export type ApiProviderId = "comet" | "openai" | "byteplus" | "kling" | "wavespeed" | "hensun" | "fal" | "dashscope";
+export type ApiProviderId = "comet" | "openai" | "byteplus" | "kling" | "wavespeed" | "fal" | "dashscope" | "xai" | "higgsfield" | "meta";
 export type AccountTier = "gratis" | "murah" | "paid";
 export type AccountStatus = "live" | "dead" | "limited";
 
@@ -40,14 +40,15 @@ export const API_PROVIDER_DEFS: {
   name: string;
   baseURL: string;
 }[] = [
-  { id: "comet", name: "CometAPI", baseURL: "https://api.cometapi.com" },
   { id: "openai", name: "OpenAI", baseURL: "https://api.openai.com/v1" },
   { id: "byteplus", name: "BytePlus Ark", baseURL: "https://ark.ap-southeast.bytepluses.com/api/v3" },
   { id: "kling", name: "Kling", baseURL: "https://api-singapore.klingai.com" },
   { id: "wavespeed", name: "Wavespeed", baseURL: "https://api.wavespeed.ai" },
-  { id: "hensun", name: "HensunAI", baseURL: "https://hensunai.com" },
   { id: "fal", name: "fal.ai", baseURL: "https://queue.fal.run" },
   { id: "dashscope", name: "Alibaba Model Studio", baseURL: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1" },
+  { id: "xai", name: "xAI Grok Imagine", baseURL: "https://api.x.ai/v1" },
+  { id: "higgsfield", name: "Higgsfield", baseURL: "https://api.higgsfield.ai" },
+  { id: "meta", name: "Meta Muse", baseURL: "https://api.meta.ai/v1" },
 ];
 
 const TIER_RANK: Record<AccountTier, number> = { gratis: 0, murah: 1, paid: 2 };
@@ -187,13 +188,16 @@ function migrateLegacy() {
   if (migrated) return;
   migrated = true;
   try {
+    const store = readStore();
+    if (store.accounts.some((a) => a.providerId === "comet")) {
+      store.accounts = store.accounts.filter((a) => a.providerId !== "comet");
+      writeStore(store);
+    }
     const motionFile = path.join(dataRoot(), "db", "motion-providers.json");
     if (fs.existsSync(motionFile)) {
       const m = JSON.parse(fs.readFileSync(motionFile, "utf8")) as {
         providers?: { engineId?: string; apiKey?: string; baseURL?: string }[];
       };
-      const comet = m.providers?.find((p) => p.engineId === "seedance-2-5" && p.apiKey);
-      if (comet?.apiKey) addAccount("comet", comet.apiKey, { baseURL: comet.baseURL || "https://api.cometapi.com", tier: "paid", label: "default" });
       const kling = m.providers?.find((p) => (p.engineId === "kling-3-0" || p.engineId === "kling-2-6") && p.apiKey);
       if (kling?.apiKey) addAccount("kling", kling.apiKey, { baseURL: kling.baseURL, tier: "paid", label: "default" });
     }
@@ -207,14 +211,48 @@ function migrateLegacy() {
       const bp = img.providers?.find((p) => p.engineId === "seedream-5-pro" && p.apiKey && (p.baseURL || "").includes("byteplus"));
       if (bp?.apiKey) addAccount("byteplus", bp.apiKey, { baseURL: bp.baseURL, tier: "paid", label: "default" });
     }
-    const envComet = process.env.COMETAPI_KEY?.trim();
-    if (envComet) addAccount("comet", envComet, { tier: "paid", label: "env" });
     const envKling = process.env.KLING_API_KEY?.trim();
     if (envKling) addAccount("kling", envKling, { tier: "paid", label: "env" });
     const envFal = (process.env.FAL_KEY || process.env.FAL_API_KEY || "").trim();
     if (envFal) addAccount("fal", envFal, { tier: "paid", label: "env" });
     const envDash = (process.env.DASHSCOPE_API_KEY || process.env.ALIBABA_API_KEY || "").trim();
     if (envDash) addAccount("dashscope", envDash, { tier: "gratis", label: "qwen" });
+    const envXai = (process.env.XAI_API_KEY || "").trim();
+    if (envXai) {
+      addAccount("xai", envXai, {
+        baseURL: "https://api.x.ai/v1",
+        tier: "paid",
+        label: "imagine",
+        note: "Grok Imagine stills. Adult UGC. Not the LLM key.",
+      });
+    }
+    const envXaiVideo = (process.env.XAI_VIDEO_API_KEY || "").trim();
+    if (envXaiVideo) {
+      addAccount("xai", envXaiVideo, {
+        baseURL: "https://api.x.ai/v1",
+        tier: "paid",
+        label: "imagine-video",
+        note: "Grok Imagine Video 1.5 I2V. Separate from stills key.",
+      });
+    }
+    const envArk = (process.env.ARK_API_KEY || process.env.BYTEPLUS_API_KEY || "").trim();
+    if (envArk) {
+      addAccount("byteplus", envArk, {
+        baseURL: "https://ark.ap-southeast.bytepluses.com/api/v3",
+        tier: "paid",
+        label: "seedream",
+        note: "BytePlus ModelArk Seedream 5.0 / Lite / 4.5. ap-southeast-1.",
+      });
+    }
+    const envMeta = (process.env.MODEL_API_KEY || process.env.META_API_KEY || "").trim();
+    if (envMeta) {
+      addAccount("meta", envMeta, {
+        baseURL: "https://api.meta.ai/v1",
+        tier: "paid",
+        label: "muse",
+        note: "Muse Image 1.0. OpenAI-compatible images API. $0.01/image.",
+      });
+    }
     const envOai = (process.env.OPENAI_API_KEY || "").trim();
     if (envOai) {
       addAccount("openai", envOai, {
@@ -224,13 +262,23 @@ function migrateLegacy() {
         note: "GPT Image 2.5 Sunburst. Character complete set. Not LLM.",
       });
     }
+    const hfId = (process.env.HIGGSFIELD_API_KEY_ID || "").trim();
+    const hfSecret = (process.env.HIGGSFIELD_API_KEY_SECRET || "").trim();
+    if (hfId && hfSecret) {
+      addAccount("higgsfield", `${hfId}:${hfSecret}`, {
+        baseURL: "https://api.higgsfield.ai",
+        tier: "paid",
+        label: hfId,
+        note: "Higgsfield. Seedance 2.5 + Marketing Studio Image + Kling 3.0 Standard I2V.",
+      });
+    }
     const envWan = (process.env.DASHSCOPE_WAN_API_KEY || "").trim();
     if (envWan) {
       addAccount("dashscope", envWan, {
         baseURL: "https://dashscope-intl.aliyuncs.com/api/v1",
         tier: "paid",
         label: "wan-3.0",
-        note: "Wan 3.0 video only. Singapore. Separate from Qwen LLM.",
+        note: "Wan 3.0 video only. Singapore dashscope-intl. Separate from Qwen LLM.",
       });
     }
   } catch {
@@ -252,18 +300,26 @@ export function listUsableAccounts(providerId: ApiProviderId): ApiAccount[] {
   return sortUsable(readStore().accounts.filter((a) => a.providerId === providerId));
 }
 
-function isWanDashscope(row: ApiAccount) {
+export function isWanDashscope(row: ApiAccount) {
   return /wan/i.test(row.label) || /wan/i.test(row.note || "");
 }
 
-/** Wan 3.0 video key only. Never the Qwen LLM DashScope account. */
+/** Qwen LLM / Qwen Image. Never the Wan 3.0 video account. */
+export function getDashscopeImageAccount(): ApiAccount | undefined {
+  const accs = listUsableAccounts("dashscope").filter((a) => !isWanDashscope(a));
+  const hit = accs[0];
+  if (!hit) return undefined;
+  return { ...hit, baseURL: "https://dashscope-intl.aliyuncs.com/api/v1" };
+}
+
+/** Wan 3.0 video key only. Never the Qwen LLM DashScope account. Always Singapore API host. */
 export function getWanAccount(): ApiAccount | undefined {
   const accs = listUsableAccounts("dashscope");
   const labeled = accs.find(isWanDashscope);
-  if (labeled) return labeled;
   const envWan = (process.env.DASHSCOPE_WAN_API_KEY || "").trim();
-  if (!envWan) return undefined;
-  return accs.find((a) => a.apiKey === envWan);
+  const hit = labeled || (envWan ? accs.find((a) => a.apiKey === envWan) : undefined);
+  if (!hit) return undefined;
+  return { ...hit, baseURL: "https://dashscope-intl.aliyuncs.com/api/v1" };
 }
 
 export function hasWanProvider() {
@@ -277,6 +333,51 @@ function isOpenaiCharacter(row: ApiAccount) {
 export function getOpenaiAccount(): ApiAccount | undefined {
   const accs = listUsableAccounts("openai");
   return accs.find(isOpenaiCharacter) || accs[0];
+}
+
+export function getXaiAccount(): ApiAccount | undefined {
+  const accs = listUsableAccounts("xai");
+  if (accs[0]) return accs[0];
+  const key = (process.env.XAI_API_KEY || "").trim();
+  if (!key) return undefined;
+  return {
+    id: "env-xai",
+    providerId: "xai",
+    name: "xAI Grok Imagine",
+    label: "imagine",
+    baseURL: "https://api.x.ai/v1",
+    apiKey: key,
+    tier: "paid",
+    status: "live",
+    createdAt: nowIso(),
+  };
+}
+
+export function hasXaiProvider() {
+  return Boolean(getXaiAccount() || (process.env.XAI_API_KEY || "").trim());
+}
+
+export function getHiggsfieldAccount(): ApiAccount | undefined {
+  const accs = listUsableAccounts("higgsfield");
+  if (accs[0]) return accs[0];
+  const id = (process.env.HIGGSFIELD_API_KEY_ID || "").trim();
+  const secret = (process.env.HIGGSFIELD_API_KEY_SECRET || "").trim();
+  if (!id || !secret) return undefined;
+  return {
+    id: "env-higgsfield",
+    providerId: "higgsfield",
+    name: "Higgsfield",
+    label: id,
+    baseURL: "https://api.higgsfield.ai",
+    apiKey: `${id}:${secret}`,
+    tier: "paid",
+    status: "live",
+    createdAt: nowIso(),
+  };
+}
+
+export function hasHiggsfieldProvider() {
+  return Boolean(getHiggsfieldAccount());
 }
 
 export function getApiProvider(providerId: ApiProviderId): ApiAccount | undefined {

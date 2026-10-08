@@ -22,10 +22,13 @@ async function reapStaleRunningJobs() {
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const characterId = url.searchParams.get("characterId") || "";
+  const productId = url.searchParams.get("productId") || "";
   const live = url.searchParams.get("live") === "1";
   if (!live) await reapStaleRunningJobs();
   const all = listJobs();
-  const scoped = characterId ? all.filter((j) => jobBelongsToCharacter(j, characterId)) : all;
+  let scoped = all;
+  if (characterId) scoped = scoped.filter((j) => jobBelongsToCharacter(j, characterId));
+  if (productId) scoped = scoped.filter((j) => j.productId === productId || (j.input || "").includes(productId));
   const jobs = live ? scoped.filter((j) => j.status === "running" || j.status === "queued") : scoped;
   return NextResponse.json({
     jobs,

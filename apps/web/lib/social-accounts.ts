@@ -80,6 +80,39 @@ export function socialApps(): SocialApps {
   return readStore().apps;
 }
 
+export type PublicAppConfig = { clientId: string; redirectUri: string; hasSecret: boolean };
+
+export type PublicSocialApps = {
+  publicBaseUrl?: string;
+  youtube?: PublicAppConfig;
+  tiktok?: PublicAppConfig;
+  instagram?: PublicAppConfig;
+  threads?: PublicAppConfig;
+  x?: PublicAppConfig;
+  pinterest?: PublicAppConfig;
+};
+
+/** Browser-safe app config. The client secret stays in data/db. */
+export function publicApps(apps: SocialApps = socialApps()): PublicSocialApps {
+  const row = (key: keyof Omit<SocialApps, "publicBaseUrl">): PublicAppConfig => {
+    const app = apps[key];
+    return {
+      clientId: app?.clientId || "",
+      redirectUri: app?.redirectUri || "",
+      hasSecret: Boolean(app?.clientSecret?.trim()),
+    };
+  };
+  return {
+    publicBaseUrl: apps.publicBaseUrl,
+    youtube: row("youtube"),
+    tiktok: row("tiktok"),
+    instagram: row("instagram"),
+    threads: row("threads"),
+    x: row("x"),
+    pinterest: row("pinterest"),
+  };
+}
+
 export function saveSocialApps(patch: SocialApps): SocialApps {
   const store = readStore();
   store.apps = { ...store.apps, ...patch };
@@ -100,7 +133,6 @@ export function publicAccount(row: SocialAccount) {
   return {
     ...rest,
     hasToken: Boolean(accessToken),
-    tokenHint: accessToken ? `${accessToken.slice(0, 6)}…` : "",
   };
 }
 

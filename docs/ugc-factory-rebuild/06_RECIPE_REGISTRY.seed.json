@@ -1,0 +1,397 @@
+{
+  "schema_version": "1.0",
+  "package_version": "1.0",
+  "created_on": "2026-10-02",
+  "purpose": "Proposed pilot configuration; no measured recipe performance.",
+  "generation_defaults": {
+    "production_count": 1,
+    "duration_ms": 30000,
+    "aspect_ratio": "9:16",
+    "candidate_count": 1,
+    "cost_limit": null,
+    "cost_limit_required_before_live_dispatch": true,
+    "plan_approval_required": true,
+    "final_approval_required": true,
+    "automatic_market_expansion": false,
+    "automatic_legacy_template_expansion": false,
+    "production_mode": "OPERATOR_PILOT"
+  },
+  "decision": {
+    "provider": "typesafe",
+    "model_id": "jev-1.13.0",
+    "inputs": "TEXT_STRUCTURED_STATE",
+    "dependent_questions": "STAGED_CALLS",
+    "confidence_threshold": null,
+    "threshold_policy": "CALIBRATE_ON_DOMAIN_FIXTURES",
+    "missing_performance_label": "HYPOTHESIS"
+  },
+  "runtime_roles": {
+    "creative_planner": {
+      "preferred_display_name": "GPT 6 Astra",
+      "actual_model_binding_id": null,
+      "verification_required": true
+    },
+    "video_executor_preferences": [
+      {
+        "display_name": "Seedance 2.5",
+        "actual_model_binding_id": null,
+        "verification_required": true
+      },
+      {
+        "display_name": "WAN 3.0 Prime",
+        "actual_model_binding_id": null,
+        "verification_required": true
+      },
+      {
+        "display_name": "WAN 3.0",
+        "actual_model_binding_id": null,
+        "verification_required": true,
+        "silent_fallback_allowed": false
+      }
+    ]
+  },
+  "markets": [
+    {
+      "id": "ID",
+      "default_locale": "id-ID",
+      "selectable_locales": [
+        "id-ID"
+      ],
+      "offer_currency": "IDR"
+    },
+    {
+      "id": "MY",
+      "default_locale": "ms-MY",
+      "selectable_locales": [
+        "ms-MY",
+        "en-MY"
+      ],
+      "offer_currency": "MYR"
+    },
+    {
+      "id": "SG",
+      "default_locale": "en-SG",
+      "selectable_locales": [
+        "en-SG"
+      ],
+      "offer_currency": "SGD"
+    },
+    {
+      "id": "TH",
+      "default_locale": "th-TH",
+      "selectable_locales": [
+        "th-TH"
+      ],
+      "offer_currency": "THB"
+    },
+    {
+      "id": "US",
+      "default_locale": "en-US",
+      "selectable_locales": [
+        "en-US"
+      ],
+      "offer_currency": "USD"
+    }
+  ],
+  "locale_capability_policy": "Selectable draft locale is not verified generation support.",
+  "recipes": [
+    {
+      "id": "HOME_HANDS_DEMO",
+      "version": 1,
+      "runtime_status": "PILOT",
+      "allowed_production_modes": [
+        "OPERATOR_PILOT"
+      ],
+      "validated": false,
+      "categories": [
+        "home_gadget.kitchen_prep",
+        "home_gadget.cleaning"
+      ],
+      "buyer": "adult_household_buyer",
+      "creator_modes": [
+        "HANDS"
+      ],
+      "mechanisms": [
+        "action_first",
+        "concrete_question",
+        "visible_payoff"
+      ],
+      "required_asset_roles": [
+        "product_appearance",
+        "operation_reference",
+        "bounded_output_state"
+      ],
+      "required_state_roles": [
+        "ready",
+        "in_use",
+        "observable_output"
+      ],
+      "beat_roles": [
+        "action_hook",
+        "use",
+        "inspect_output",
+        "next_step"
+      ],
+      "abstract_bible_patterns": [
+        "P03",
+        "P04",
+        "P07"
+      ],
+      "quality_checks": [
+        "product_identity",
+        "hand_contact",
+        "operation_fidelity",
+        "bounded_claims",
+        "audio_ownership"
+      ],
+      "performance_status": "UNKNOWN"
+    },
+    {
+      "id": "HOME_CREATOR_DEMO",
+      "version": 1,
+      "runtime_status": "PILOT",
+      "allowed_production_modes": [
+        "OPERATOR_PILOT"
+      ],
+      "validated": false,
+      "categories": [
+        "home_gadget.kitchen_prep",
+        "home_gadget.cleaning"
+      ],
+      "buyer": "adult_household_buyer",
+      "creator_modes": [
+        "GENERATED_ADULT",
+        "SUPPLIED_ADULT"
+      ],
+      "mechanisms": [
+        "purchase_hesitation",
+        "explain_while_doing",
+        "concrete_question"
+      ],
+      "required_asset_roles": [
+        "adult_identity",
+        "product_appearance",
+        "operation_reference"
+      ],
+      "required_state_roles": [
+        "ready",
+        "in_use",
+        "observable_output"
+      ],
+      "beat_roles": [
+        "viewer_concern",
+        "feature_demo",
+        "objection_answer",
+        "next_step"
+      ],
+      "abstract_bible_patterns": [
+        "P01",
+        "P04",
+        "P07"
+      ],
+      "quality_checks": [
+        "creator_identity",
+        "product_identity",
+        "voice_continuity",
+        "lip_sync_if_visible",
+        "truthful_experience"
+      ],
+      "performance_status": "UNKNOWN"
+    },
+    {
+      "id": "HOME_UNBOX_FIRST_USE",
+      "version": 1,
+      "runtime_status": "PILOT",
+      "allowed_production_modes": [
+        "OPERATOR_PILOT"
+      ],
+      "validated": false,
+      "categories": [
+        "home_gadget.kitchen_prep",
+        "home_gadget.cleaning"
+      ],
+      "buyer": "adult_household_buyer",
+      "creator_modes": [
+        "HANDS",
+        "GENERATED_ADULT",
+        "SUPPLIED_ADULT"
+      ],
+      "mechanisms": [
+        "contents_reveal",
+        "setup_question",
+        "first_operation"
+      ],
+      "required_asset_roles": [
+        "local_packaging",
+        "confirmed_contents",
+        "setup_reference",
+        "operation_reference"
+      ],
+      "required_state_roles": [
+        "closed_package",
+        "contents_visible",
+        "ready",
+        "in_use"
+      ],
+      "beat_roles": [
+        "reveal",
+        "contents",
+        "setup_and_use",
+        "practical_close"
+      ],
+      "abstract_bible_patterns": [
+        "P04",
+        "P07"
+      ],
+      "quality_checks": [
+        "package_identity",
+        "contents_fidelity",
+        "state_continuity",
+        "operation_fidelity"
+      ],
+      "performance_status": "UNKNOWN"
+    },
+    {
+      "id": "TOY_UNBOX_FIRST_PLAY",
+      "version": 1,
+      "runtime_status": "PILOT",
+      "allowed_production_modes": [
+        "OPERATOR_PILOT"
+      ],
+      "validated": false,
+      "categories": [
+        "preschool_toys.pretend_play",
+        "preschool_toys.ready_to_play"
+      ],
+      "buyer": "adult_parent_caregiver_or_gift_buyer",
+      "product_user_age_bands": [
+        "3-4",
+        "5-6"
+      ],
+      "exact_sku_age_review_required": true,
+      "creator_modes": [
+        "HANDS",
+        "GENERATED_ADULT",
+        "SUPPLIED_ADULT"
+      ],
+      "mechanisms": [
+        "contents_reveal",
+        "play_episode",
+        "parent_question"
+      ],
+      "required_asset_roles": [
+        "local_packaging",
+        "confirmed_contents",
+        "play_reference",
+        "age_evidence"
+      ],
+      "required_state_roles": [
+        "closed_package",
+        "contents_visible",
+        "play_setup",
+        "play"
+      ],
+      "beat_roles": [
+        "reveal",
+        "contents",
+        "one_play_episode",
+        "adult_buyer_close"
+      ],
+      "abstract_bible_patterns": [
+        "P04",
+        "P07"
+      ],
+      "quality_checks": [
+        "contents_fidelity",
+        "plausible_play",
+        "age_wording",
+        "truthful_experience",
+        "no_invented_child_reaction"
+      ],
+      "performance_status": "UNKNOWN"
+    },
+    {
+      "id": "TOY_UNBOX_BUILD_PLAY",
+      "version": 1,
+      "runtime_status": "PILOT",
+      "allowed_production_modes": [
+        "OPERATOR_PILOT"
+      ],
+      "validated": false,
+      "categories": [
+        "preschool_toys.large_piece_building",
+        "preschool_toys.simple_take_apart"
+      ],
+      "buyer": "adult_parent_caregiver_or_gift_buyer",
+      "product_user_age_bands": [
+        "3-4",
+        "5-6"
+      ],
+      "exact_sku_age_review_required": true,
+      "creator_modes": [
+        "HANDS",
+        "GENERATED_ADULT",
+        "SUPPLIED_ADULT"
+      ],
+      "mechanisms": [
+        "build_payoff",
+        "assembly_question",
+        "parent_explanation"
+      ],
+      "required_asset_roles": [
+        "local_packaging",
+        "confirmed_contents",
+        "assembly_reference",
+        "intermediate_build",
+        "completed_build",
+        "play_reference",
+        "age_evidence"
+      ],
+      "required_state_roles": [
+        "closed_package",
+        "contents_visible",
+        "partially_assembled",
+        "completed",
+        "play"
+      ],
+      "beat_roles": [
+        "reveal",
+        "selected_assembly_actions",
+        "completed_build",
+        "play",
+        "adult_buyer_close"
+      ],
+      "abstract_bible_patterns": [
+        "P03",
+        "P04",
+        "P07"
+      ],
+      "quality_checks": [
+        "parts_identity",
+        "connection_fidelity",
+        "intermediate_state_continuity",
+        "completed_model_identity",
+        "plausible_play",
+        "no_invented_child_reaction"
+      ],
+      "performance_status": "UNKNOWN"
+    }
+  ],
+  "recipe_promotion_policy": {
+    "routine_generation_requires": [
+      "software_checks_passed",
+      "real_output_reviewed",
+      "benchmark_quality_accepted",
+      "recipe_version_pinned"
+    ],
+    "performance_is_separate": true
+  },
+  "source_policy": {
+    "bible_version": "AIOSCreator UGC Yapping Creative Bible v1.0",
+    "abstract_patterns_are_adaptation_guidance": true,
+    "source_performance": "UNKNOWN",
+    "preserve_raw_runtime_eligible": true,
+    "preserve_raw_editorial_approval": true,
+    "source_claims_are_new_product_facts": false
+  }
+}

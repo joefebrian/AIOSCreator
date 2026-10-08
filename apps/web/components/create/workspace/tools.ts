@@ -4,7 +4,7 @@ export const VIDEO_TOOLS = [
   { id: "complete-set", label: "Complete set", ready: true },
   { id: "storyboard-to-video", label: "Storyboard to video", ready: false },
   { id: "edit-video", label: "Edit video", ready: false },
-  { id: "clone-video", label: "Clone Video", ready: false },
+  { id: "clone-video", label: "Replicate TikTok", ready: true },
   { id: "talking-video", label: "Talking video", ready: false },
   { id: "extend-video", label: "Extend video", ready: false },
   { id: "add-subtitles", label: "Add subtitles", ready: false },
@@ -12,7 +12,11 @@ export const VIDEO_TOOLS = [
 
 export const IMAGE_TOOLS = [
   { id: "generate-image", label: "Generate image", ready: true },
-  { id: "edit-image", label: "Edit image", ready: true },
+  { id: "try-on", label: "Try-on", ready: true },
+  { id: "face-swap", label: "Face swap", ready: true },
+  { id: "edit-image", label: "Edit still", ready: true },
 ] as const;
 
-export const WORKSPACE_I2V_ENGINES = ["minimax-h3", "wan-3-0-std", "wan-3-0"] as const;
+export const WORKSPACE_I2V_ENGINES = ["minimax-h3", "grok-imagine-video", "wan-3-0-std", "wan-3-0"] as const;
+
+export { PAID_I2V_ENGINES } from "@/lib/paid-i2v";

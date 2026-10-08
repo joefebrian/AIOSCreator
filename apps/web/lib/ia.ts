@@ -29,7 +29,7 @@ export const IA: Record<string, { title: string; note: string }> = {
   },
   "/create/ugc-factory": {
     title: "UGC Factory",
-    note: "Product → script → still → clip → VoiceStudio VO (waits for GPU) → Calendar. Faceless VO uses /v1/audio/speech.",
+    note: "SKU → Write → still → clip.",
   },
   "/create/motion": {
     title: "MotionControl",
@@ -37,7 +37,7 @@ export const IA: Record<string, { title: string; note: string }> = {
   },
   "/create/characters": {
     title: "Characters",
-    note: "Library of character objects. Identity = GPT Image 2 / Seedream 5.0 Pro when keyed, else Klein. Then GEN set. Voice/rights = M04.",
+    note: "Library of character objects. Image: Generate · Try-on · Face swap · Edit still. Identity = GPT Image 2.5 / Seedream when keyed.",
   },
   "/create/motion-library": {
     title: "Motion Library",
@@ -53,15 +53,15 @@ export const IA: Record<string, { title: string; note: string }> = {
   },
   "/distribute/calendar": {
     title: "Calendar",
-    note: "Schedule. YouTube first. Approval before public. Tick while the page is open.",
+    note: "Schedule a still or video onto connected logins. Approve before it publishes.",
   },
   "/distribute/queue": {
-    title: "Publish Queue",
-    note: "Official APIs or export pack. Idempotent retry.",
+    title: "Publish",
+    note: "Approve, then Direct or Export. Pinterest direct is a still on the board picked for that post.",
   },
   "/distribute/accounts": {
     title: "Accounts",
-    note: "Official YouTube / TikTok Inbox / Instagram OAuth. Tokens in data/db. Export pack always available.",
+    note: "App credentials once per platform, then Connect that login. Tokens stay on this PC.",
   },
   "/grow/engagement": {
     title: "Engagement",

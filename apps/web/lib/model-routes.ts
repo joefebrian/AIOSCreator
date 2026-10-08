@@ -1,4 +1,4 @@
-import { getApiProvider, getOpenaiAccount, getWanAccount, hasApiProvider, hasWanProvider, type ApiProviderId } from "./api-providers";
+import { getApiProvider, getDashscopeImageAccount, getHiggsfieldAccount, getOpenaiAccount, getWanAccount, getXaiAccount, hasApiProvider, hasHiggsfieldProvider, hasWanProvider, hasXaiProvider, type ApiProviderId } from "./api-providers";
 
 export type ViaId = ApiProviderId | "comfy" | "auto";
 
@@ -18,31 +18,48 @@ const PROVIDER_NAME: Record<ApiProviderId | "comfy", string> = {
   byteplus: "BytePlus",
   kling: "Kling",
   wavespeed: "Wavespeed",
-  hensun: "HensunAI",
+
   fal: "fal.ai",
   dashscope: "Alibaba Model Studio",
+  xai: "xAI Grok Imagine",
+  higgsfield: "Higgsfield",
+  meta: "Meta Muse",
 };
 
 /** Preference order. First keyed provider wins unless via is pinned. */
 export const MODEL_ROUTES: Record<string, Array<ApiProviderId | "comfy">> = {
   "gpt-image-2.5": ["openai"],
-  "gpt-image-2": ["comet", "openai"],
-  "seedream-5-pro": ["comet", "byteplus"],
-  "seedream-4-5": ["hensun"],
-  "nano-banana": ["comet"],
-  "seedance-2-5": ["hensun", "comet", "wavespeed", "byteplus"],
-  "seedance-2-0": ["hensun"],
+  "gpt-image-2.5-flare": ["openai"],
+  "grok-imagine": ["xai"],
+  "grok-imagine-tryon": ["xai"],
+  "kling-image-omni": ["kling"],
+  "kolors-virtual-try-on": ["kling"],
+  "gpt-image-2": ["openai"],
+  "seedream-5-pro": ["byteplus"],
+  "seedream-5-lite": ["byteplus"],
+  "seedream-4-5": ["byteplus"],
+  "muse-image-1.0": ["meta"],
+  "qwen-image-3.0": ["dashscope"],
+  "reactor": ["comfy"],
+  "nano-banana": [],
+  "seedance-2-5": ["higgsfield", "wavespeed", "byteplus"],
+  "seedance-2-5-extend": ["higgsfield"],
+  "kling-3-0-std": ["higgsfield"],
+  "marketing-studio-image": ["higgsfield"],
   "kling-2-6": ["kling"],
   "kling-3-0": ["kling"],
   "dreamactor-v2": ["fal"],
   "wan-3-0": ["dashscope"],
   "wan-3-0-std": ["dashscope"],
+  "grok-imagine-video": ["xai"],
   "flux2-klein-4b": ["comfy"],
   "flux2-klein-base-9b": ["comfy"],
   sd15: ["comfy"],
   "z-image-turbo": ["comfy"],
   "qwen-image-edit": ["comfy"],
-  "klein-qwen": ["comfy"],
+  "qwen-image-2.1": ["comfy"],
+  "qwen-image-2.1-gguf": ["comfy"],
+  "qwen-image-2.1-viggle": ["comfy"],
   "minimax-h3": ["comfy"],
   "minimax-h3-long": ["comfy"],
   "minimax-h3-r2v": ["comfy"],
@@ -57,17 +74,29 @@ export const MODEL_ROUTES: Record<string, Array<ApiProviderId | "comfy">> = {
 /** Callable today. Catalog can list more pipes; Auto never picks an unwired one. */
 const WIRED: Record<string, Array<ApiProviderId | "comfy">> = {
   "gpt-image-2.5": ["openai"],
-  "gpt-image-2": ["comet", "openai"],
-  "seedream-5-pro": ["comet", "byteplus"],
-  "seedream-4-5": ["hensun"],
-  "nano-banana": ["comet"],
-  "seedance-2-5": ["hensun", "comet"],
-  "seedance-2-0": ["hensun"],
+  "gpt-image-2.5-flare": ["openai"],
+  "grok-imagine": ["xai"],
+  "grok-imagine-tryon": ["xai"],
+  "kling-image-omni": ["kling"],
+  "kolors-virtual-try-on": [],
+  "gpt-image-2": ["openai"],
+  "seedream-5-pro": ["byteplus"],
+  "seedream-5-lite": ["byteplus"],
+  "seedream-4-5": ["byteplus"],
+  "muse-image-1.0": ["meta"],
+  "qwen-image-3.0": ["dashscope"],
+  "reactor": ["comfy"],
+  "nano-banana": [],
+  "seedance-2-5": ["higgsfield"],
+  "seedance-2-5-extend": ["higgsfield"],
   "kling-2-6": ["kling"],
   "kling-3-0": ["kling"],
+  "kling-3-0-std": ["higgsfield"],
+  "marketing-studio-image": ["higgsfield"],
   "dreamactor-v2": ["fal"],
   "wan-3-0": ["dashscope"],
   "wan-3-0-std": ["dashscope"],
+  "grok-imagine-video": ["xai"],
 };
 
 export function isWired(modelId: string, provider: ApiProviderId | "comfy") {
@@ -79,17 +108,27 @@ export function isWired(modelId: string, provider: ApiProviderId | "comfy") {
 
 export const MODEL_SLUG: Partial<Record<string, Partial<Record<ApiProviderId, string>>>> = {
   "gpt-image-2.5": { openai: "gpt-image-2.5-sunburst" },
-  "gpt-image-2": { comet: "gpt-image-2", openai: "gpt-image-2" },
-  "seedream-5-pro": { comet: "seedream-5-0-pro-260628", byteplus: "seedream-5-0-pro" },
-  "seedream-4-5": { hensun: "ByteDance-Seedream-4.5" },
-  "nano-banana": { comet: "gemini-2.5-flash-image" },
-  "seedance-2-5": { hensun: "Dreamina-Seedance-2.5", comet: "seedance-2-5" },
-  "seedance-2-0": { hensun: "Dreamina-Seedance-2.0" },
+  "gpt-image-2.5-flare": { openai: "gpt-image-2.5-flare" },
+  "gpt-image-2": { openai: "gpt-image-2" },
+  "seedream-5-pro": { byteplus: "dola-seedream-5-0-pro-260628" },
+  "seedream-5-lite": { byteplus: "seedream-5-0-lite-260128" },
+  "seedream-4-5": { byteplus: "seedream-4-5-251128" },
+  "muse-image-1.0": { meta: "muse-image-1.0" },
+  "qwen-image-3.0": { dashscope: "qwen-image-3.0-pro" },
+  "seedance-2-5": { higgsfield: "bytedance/seedance-2.5/image-to-video" },
+  "seedance-2-5-extend": { higgsfield: "bytedance/seedance-2.5/video-extend" },
+  "kling-3-0-std": { higgsfield: "kling-video/v3.0/std/image-to-video" },
+  "marketing-studio-image": { higgsfield: "marketing-studio/image" },
   "kling-2-6": { kling: "kling-2.6" },
   "kling-3-0": { kling: "kling-3.0" },
   "dreamactor-v2": { fal: "fal-ai/bytedance/dreamactor/v2" },
   "wan-3-0": { dashscope: "wan3.0-video-prime" },
   "wan-3-0-std": { dashscope: "wan3.0-video" },
+  "grok-imagine": { xai: "grok-imagine-image-2.0" },
+  "grok-imagine-tryon": { xai: "grok-imagine-image-quality" },
+  "kling-image-omni": { kling: "kling-v3-omni" },
+  "kolors-virtual-try-on": { kling: "kolors-virtual-try-on-v1-5" },
+  "grok-imagine-video": { xai: "grok-imagine-video-1.5" },
 };
 
 export function routesFor(modelId: string): Array<ApiProviderId | "comfy"> {
@@ -103,9 +142,15 @@ export function routeStatus(modelId: string) {
         ? true
         : (modelId === "wan-3-0" || modelId === "wan-3-0-std") && id === "dashscope"
           ? hasWanProvider()
-          : modelId === "gpt-image-2.5" && id === "openai"
+          : (modelId === "gpt-image-2.5" || modelId === "gpt-image-2.5-flare") && id === "openai"
             ? Boolean(getOpenaiAccount())
-            : hasApiProvider(id);
+            : modelId === "qwen-image-3.0" && id === "dashscope"
+              ? Boolean(getDashscopeImageAccount())
+            : id === "xai"
+              ? hasXaiProvider()
+              : id === "higgsfield"
+                ? hasHiggsfieldProvider()
+                : hasApiProvider(id);
     const wired = isWired(modelId, id);
     return {
       id,
@@ -134,9 +179,15 @@ function hitFor(
   const creds =
     (modelId === "wan-3-0" || modelId === "wan-3-0-std") && id === "dashscope"
       ? getWanAccount()
-      : modelId === "gpt-image-2.5" && id === "openai"
+      : (modelId === "gpt-image-2.5" || modelId === "gpt-image-2.5-flare") && id === "openai"
         ? getOpenaiAccount()
-        : getApiProvider(id);
+        : modelId === "qwen-image-3.0" && id === "dashscope"
+          ? getDashscopeImageAccount()
+        : id === "xai"
+          ? getXaiAccount()
+          : id === "higgsfield"
+            ? getHiggsfieldAccount()
+            : getApiProvider(id);
   if (!creds) return undefined;
   return {
     provider: id,
@@ -192,7 +243,10 @@ export function hasAnyRoute(modelId: string) {
     if (id === "comfy") return true;
     if (!isWired(modelId, id)) return false;
     if ((modelId === "wan-3-0" || modelId === "wan-3-0-std") && id === "dashscope") return hasWanProvider();
-    if (modelId === "gpt-image-2.5" && id === "openai") return Boolean(getOpenaiAccount());
+    if ((modelId === "gpt-image-2.5" || modelId === "gpt-image-2.5-flare") && id === "openai") return Boolean(getOpenaiAccount());
+    if (modelId === "qwen-image-3.0" && id === "dashscope") return Boolean(getDashscopeImageAccount());
+    if (id === "xai") return hasXaiProvider();
+    if (id === "higgsfield") return hasHiggsfieldProvider();
     return hasApiProvider(id);
   });
 }

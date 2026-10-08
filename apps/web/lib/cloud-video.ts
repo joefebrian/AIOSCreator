@@ -1,6 +1,8 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { grokImagineI2V } from "./grok-imagine";
+import { higgsfieldKling30StdI2V, higgsfieldSeedanceExtend, higgsfieldSeedanceI2V, higgsfieldSeedanceRef2V } from "./higgsfield";
 import { cloudHttpError, withCloudFailover, type CloudCreds } from "./cloud-router";
 import { klingMotionPrompt, type KlingOrientation } from "./kling-lock";
 import { klingCallbackUrl } from "./kling-webhook";
@@ -121,8 +123,60 @@ async function seedanceOnce(p: CloudCreds, srcImage: string, prompt: string, sec
   throw new Error("Seedance timed out waiting for the clip");
 }
 
-export async function cometSeedanceI2V(srcImage: string, prompt: string, seconds = 5, engineId = "seedance-2-5") {
-  return withCloudFailover(engineId, (hit) => seedanceOnce(hit, srcImage, prompt, seconds), {
+export async function higgsfieldSeedanceExtendVideo(srcVideo: string, prompt: string, seconds = 5, stillPath?: string) {
+  return withCloudFailover("seedance-2-5-extend", (hit) => higgsfieldSeedanceExtend(hit, srcVideo, prompt, seconds, stillPath), {
+    kind: "motion",
+    durationSec: Math.min(30, Math.max(4, Math.round(seconds || 5))),
+    resolution: "720p",
+  });
+}
+
+export async function higgsfieldKlingStdI2V(srcImage: string, prompt: string, seconds = 5, sound = true) {
+  return withCloudFailover("kling-3-0-std", (hit) => higgsfieldKling30StdI2V(hit, srcImage, prompt, seconds, sound), {
+    kind: "motion",
+    durationSec: Math.min(15, Math.max(3, Math.round(seconds || 5))),
+    resolution: "720p",
+  });
+}
+
+/** Classifiers still read NEGATIVE: nudity / undressing. Strip those tokens for cloud I2V. */
+export function sanitizeCloudVideoPrompt(prompt: string) {
+  return (prompt || "")
+    .replace(
+      /((?:^|\n)\s*(?:NEGATIVE|Avoid)\s*:\s*)([^\n]*)/gi,
+      (_all, lead: string, body: string) =>
+        `${lead}${body
+          .replace(/\b(nudity|nude|undressing|underwear|bralette|boyshorts|see-through|lingerie)\b/gi, "")
+          .replace(/[,;]\s*[,;]/g, ",")
+          .replace(/^[\s,;]+|[\s,;]+$/g, "")}`,
+    )
+    .replace(/\bno (garment )?removal on camera\b/gi, "wardrobe already on at each cut")
+    .trim();
+}
+
+export async function grokImagineVideoI2V(srcImage: string, prompt: string, seconds = 6) {
+  return withCloudFailover("grok-imagine-video", (hit) => grokImagineI2V(hit, srcImage, prompt, seconds), {
+    kind: "motion",
+    durationSec: Math.min(15, Math.max(3, Math.round(seconds || 6))),
+    resolution: "720p",
+  });
+}
+
+export async function cometSeedanceI2V(
+  srcImage: string,
+  prompt: string,
+  seconds = 5,
+  engineId = "seedance-2-5",
+  extraPaths?: string[],
+) {
+  const extras = (extraPaths || []).filter((p) => p && p !== srcImage && fs.existsSync(p));
+  return withCloudFailover(engineId, (hit) => {
+    if (hit.provider === "higgsfield") {
+      if (extras.length) return higgsfieldSeedanceRef2V(hit, [srcImage, ...extras], prompt, seconds);
+      return higgsfieldSeedanceI2V(hit, srcImage, prompt, seconds);
+    }
+    return seedanceOnce(hit, srcImage, prompt, seconds);
+  }, {
     kind: "motion",
     durationSec: Math.min(30, Math.max(4, Math.round(seconds || 5))),
     resolution: "720p",
@@ -347,35 +401,68 @@ function klingFitDrive(src: string, orientation: KlingOrientation) {
   return { path: file, orientation: ori, note: notes.join(" ") };
 }
 
+function publicUrl(text: string) {
+  const line = text.trim().split(/\s+/)[0] || "";
+  return /^https?:\/\//i.test(line) ? line : "";
+}
+
+function hostFailure(name: string, status: number, text: string) {
+  const plain = text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  return `${name} ${status}${plain ? ` ${plain.slice(0, 80)}` : ""}`;
+}
+
+async function urlServesFile(url: string) {
+  try {
+    const res = await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(20_000) });
+    const len = Number(res.headers.get("content-length") || "0");
+    const type = (res.headers.get("content-type") || "").toLowerCase();
+    return res.ok && len > 1000 && !type.includes("text/html");
+  } catch {
+    return false;
+  }
+}
+
+/** Kling needs a public video URL. Litterbox and 0x0.st are down, so the clip goes to uguu. */
 export async function hostPublicFile(filePath: string, mime: string, fallbackName: string): Promise<string> {
   const buf = fs.readFileSync(filePath);
   const name = path.basename(filePath).replace(/[^\w.-]+/g, "_") || fallbackName;
   const blob = new Blob([new Uint8Array(buf)], { type: mime });
+  const failures: string[] = [];
+
+  const uguu = new FormData();
+  uguu.append("files[]", blob, name);
+  const uguuRes = await fetch("https://uguu.se/upload", {
+    method: "POST",
+    body: uguu,
+    signal: AbortSignal.timeout(180_000),
+  });
+  const uguuText = (await uguuRes.text()).trim();
+  if (uguuRes.ok) {
+    try {
+      const data = JSON.parse(uguuText) as { success?: boolean; files?: { url?: string }[] };
+      const url = data.files?.[0]?.url || "";
+      if (data.success && /^https?:\/\//i.test(url) && (await urlServesFile(url))) return url;
+    } catch {
+      /* fall through */
+    }
+  }
+  failures.push(hostFailure("uguu", uguuRes.status, uguuText));
 
   const litter = new FormData();
   litter.append("reqtype", "fileupload");
   litter.append("time", "24h");
   litter.append("fileToUpload", blob, name);
-  const a = await fetch("https://litterbox.catbox.moe/resources/internals/api.php", {
+  const box = await fetch("https://litterbox.catbox.moe/resources/internals/api.php", {
     method: "POST",
     body: litter,
     signal: AbortSignal.timeout(180_000),
   });
-  const aText = (await a.text()).trim();
-  if (a.ok && /^https?:\/\//i.test(aText)) return aText;
+  const boxText = (await box.text()).trim();
+  const boxUrl = publicUrl(boxText);
+  if (box.ok && boxUrl && (await urlServesFile(boxUrl))) return boxUrl;
+  failures.push(hostFailure("litterbox", box.status, boxText));
 
-  const zero = new FormData();
-  zero.append("file", blob, name);
-  const b = await fetch("https://0x0.st", {
-    method: "POST",
-    body: zero,
-    headers: { "User-Agent": "CreatorOS/1.0" },
-    signal: AbortSignal.timeout(180_000),
-  });
-  const bText = (await b.text()).trim();
-  if (b.ok && /^https?:\/\//i.test(bText)) return bText.split(/\s+/)[0];
-
-  throw new Error(`Need a public media URL. Host failed: ${aText.slice(0, 120) || bText.slice(0, 120)}`);
+  throw new Error(`Need a public media URL. ${failures.join("; ")}`);
 }
 
 async function klingHostVideo(filePath: string): Promise<string> {
@@ -392,6 +479,95 @@ function klingStillPng(src: string) {
   return src;
 }
 
+function klingImagePayload(src: string) {
+  let file = src;
+  const ext = path.extname(src).toLowerCase();
+  const big = fs.existsSync(src) && fs.statSync(src).size > 4 * 1024 * 1024;
+  if ((ext !== ".jpg" && ext !== ".jpeg" && ext !== ".png") || big) {
+    const dest = `${src}.klingface.jpg`;
+    const run = spawnSync(
+      FFMPEG,
+      ["-y", "-i", src, "-vf", "scale='min(1280,iw)':-2", "-q:v", "4", dest],
+      { windowsHide: true, encoding: "utf8" },
+    );
+    if (run.status === 0 && fs.existsSync(dest) && fs.statSync(dest).size > 500) file = dest;
+  }
+  return fs.readFileSync(file).toString("base64");
+}
+
+function klingElementId(json: unknown) {
+  const data = (json as { data?: unknown }).data;
+  const rows = Array.isArray(data) ? data : data ? [data] : [];
+  for (const row of rows) {
+    const elements = (row as { task_result?: { elements?: { element_id?: string | number }[] } }).task_result?.elements;
+    const id = elements?.find((item) => item.element_id != null)?.element_id;
+    if (id != null && String(id)) return String(id);
+  }
+  return "";
+}
+
+function klingElementStatus(json: unknown) {
+  const data = (json as { data?: unknown }).data;
+  const row = (Array.isArray(data) ? data[0] : data) as { task_status?: string; status?: string; task_status_msg?: string; message?: string } | undefined;
+  return {
+    status: String(row?.task_status || row?.status || "").toLowerCase(),
+    message: row?.task_status_msg || row?.message || "",
+  };
+}
+
+/** Kling 3.0 face element. Face photos only. Returns element_id. */
+async function klingCreateFaceElement(
+  p: CloudCreds,
+  frontalPath: string,
+  extraPaths: string[],
+  onProgress?: (label: string) => void,
+) {
+  const refs = extraPaths.filter((file) => file && file !== frontalPath && fs.existsSync(file)).slice(0, 3);
+  if (!refs.length) {
+    throw new Error("Facial element needs the front photo plus 1 to 3 different face photos.");
+  }
+  onProgress?.("Creating facial element…");
+  const created = await fetch(`${p.baseURL}/v1/general/advanced-custom-elements`, {
+    method: "POST",
+    headers: klingHeaders(p.apiKey, true),
+    body: JSON.stringify({
+      element_name: `face-${Date.now().toString(36)}`.slice(0, 20),
+      element_description: "Face only. Not wardrobe, hair, or props.",
+      reference_type: "image_refer",
+      element_image_list: {
+        frontal_image: klingImagePayload(frontalPath),
+        refer_images: refs.map((file) => ({ image_url: klingImagePayload(file) })),
+      },
+    }),
+    signal: AbortSignal.timeout(120_000),
+  });
+  const createdJson = await created.json().catch(() => ({}));
+  if (!created.ok || (typeof (createdJson as { code?: number }).code === "number" && (createdJson as { code?: number }).code !== 0)) {
+    throw new Error(klingMessage(createdJson, created.status));
+  }
+  const immediate = klingElementId(createdJson);
+  if (immediate) return immediate;
+  const taskId = String((createdJson as { data?: { task_id?: string } }).data?.task_id || "");
+  if (!taskId) throw new Error("Kling facial element returned no task id");
+  for (let i = 0; i < 40; i++) {
+    await sleep(3_000);
+    const res = await fetch(`${p.baseURL}/v1/general/advanced-custom-elements/${encodeURIComponent(taskId)}`, {
+      headers: klingHeaders(p.apiKey),
+      signal: AbortSignal.timeout(30_000),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || (typeof (json as { code?: number }).code === "number" && (json as { code?: number }).code !== 0)) {
+      throw new Error(klingMessage(json, res.status));
+    }
+    const found = klingElementId(json);
+    if (found) return found;
+    const row = klingElementStatus(json);
+    if (row.status === "failed") throw new Error(row.message || "Kling facial element failed");
+    onProgress?.(`Facial element ${row.status || "processing"}…`);
+  }
+  throw new Error("Kling facial element timed out");
+}
+
 async function klingOnce(
   p: CloudCreds,
   srcImage: string,
@@ -402,6 +578,7 @@ async function klingOnce(
   orientation: KlingOrientation,
   onProgress?: (label: string) => void,
   jobId?: string,
+  extra?: { resolution?: "720p" | "1080p"; facePaths?: string[] },
 ) {
   if (!motionPath || !fs.existsSync(motionPath)) {
     throw new Error("Kling Motion Control needs a driving video (3–30s mp4/mov)");
@@ -415,13 +592,25 @@ async function klingOnce(
   if (imgBytes > 50 * 1024 * 1024) throw new Error("still too large for Kling (max 50MB)");
   if (vidBytes > 100 * 1024 * 1024) throw new Error("drive clip too large for Kling (max 100MB)");
 
+  const facePaths = (extra?.facePaths || []).filter((file) => file && file !== still && fs.existsSync(file)).slice(0, 3);
+  let faceElement = false;
+  let elementId = "";
+  if (version === "kling-3.0" && facePaths.length) {
+    if (lockOrientation !== "video") {
+      throw new Error("Facial element binding only works when orientation matches the drive clip.");
+    }
+    elementId = await klingCreateFaceElement(p, still, facePaths, onProgress);
+    faceElement = true;
+  }
   onProgress?.("Hosting drive clip…");
   const videoUrl = await klingHostVideo(fitted.path);
-  const contents: { type: string; text?: string; url?: string }[] = [
-    { type: "prompt", text: klingMotionPrompt(prompt) },
+  const resolution = extra?.resolution === "720p" ? "720p" : "1080p";
+  const contents: { type: string; text?: string; url?: string; element_id?: string; id?: string }[] = [
+    { type: "prompt", text: klingMotionPrompt(prompt, faceElement) },
     { type: "image", url: fs.readFileSync(still).toString("base64") },
     { type: "video", url: videoUrl },
   ];
+  if (elementId) contents.push({ type: "element", element_id: elementId, id: "element_1" });
 
   onProgress?.(`Kling ${version} submitted…`);
   const callbackUrl = klingCallbackUrl();
@@ -432,7 +621,7 @@ async function klingOnce(
       contents,
       settings: {
         character_orientation: lockOrientation,
-        resolution: "1080p",
+        resolution,
         audio: sound ? "original" : "off",
       },
       options: {
@@ -496,12 +685,13 @@ export async function klingMotionControl(
   orientation: KlingOrientation = "image",
   onProgress?: (label: string) => void,
   jobId?: string,
+  extra?: { resolution?: "720p" | "1080p"; facePaths?: string[] },
 ) {
   const version = engineId === "kling-2-6" ? "kling-2.6" : "kling-3.0";
   const routeId = engineId === "kling-2-6" ? "kling-2-6" : "kling-3-0";
   return withCloudFailover(
     routeId,
-    (hit) => klingOnce(hit, srcImage, motionPath, prompt, sound, version, orientation, onProgress, jobId),
+    (hit) => klingOnce(hit, srcImage, motionPath, prompt, sound, version, orientation, onProgress, jobId, extra),
     { kind: "motion", jobId, units: 1 },
   );
 }
@@ -560,6 +750,41 @@ function falFitDrive(src: string) {
   throw new Error("DreamActor drive clip must fit 2048×1440.");
 }
 
+function falDetail(json: unknown): string {
+  if (!json || typeof json !== "object") return "";
+  const row = json as { error?: unknown; detail?: unknown; message?: unknown };
+  if (typeof row.error === "string" && row.error.trim()) return row.error.trim();
+  if (row.error && typeof row.error === "object") {
+    const message = (row.error as { message?: string }).message;
+    if (message?.trim()) return message.trim();
+  }
+  if (typeof row.message === "string" && row.message.trim()) return row.message.trim();
+  if (typeof row.detail === "string" && row.detail.trim()) return row.detail.trim();
+  if (Array.isArray(row.detail)) {
+    return row.detail
+      .map((item) => (typeof item === "string" ? item : (item as { msg?: string }).msg || ""))
+      .filter(Boolean)
+      .join("; ");
+  }
+  return "";
+}
+
+function falVideoUrl(json: unknown): string {
+  if (!json || typeof json !== "object") return "";
+  const row = json as {
+    video?: { url?: string } | string;
+    data?: { video?: { url?: string } | string };
+    payload?: { video?: { url?: string } | string };
+    response?: { video?: { url?: string } | string };
+  };
+  const videos = [row.video, row.data?.video, row.payload?.video, row.response?.video];
+  for (const video of videos) {
+    if (typeof video === "string" && video.startsWith("http")) return video;
+    if (video && typeof video === "object" && video.url?.startsWith("http")) return video.url;
+  }
+  return "";
+}
+
 async function falDreamOnce(p: CloudCreds, srcImage: string, motionPath: string, onProgress?: (label: string) => void) {
   if (!motionPath || !fs.existsSync(motionPath)) {
     throw new Error("DreamActor V2 needs a driving video (≤30s mp4/mov/webm)");
@@ -610,12 +835,13 @@ async function falDreamOnce(p: CloudCreds, srcImage: string, motionPath: string,
     onProgress?.(`DreamActor ${status || "…"}`);
     if (status === "IN_QUEUE" || status === "IN_PROGRESS") continue;
     if (status !== "COMPLETED") {
-      throw new Error(stJson.error || `DreamActor ${status || "failed"}`);
+      throw new Error(falDetail(stJson) || `DreamActor ${status || "failed"}`);
     }
     const done = await fetch(responseUrl, { headers, signal: AbortSignal.timeout(60_000) });
-    const doneJson = (await done.json().catch(() => ({}))) as { video?: { url?: string }; error?: string };
-    const url = doneJson.video?.url;
-    if (!url) throw new Error(doneJson.error || "DreamActor completed with no video url");
+    if (done.status === 202) continue;
+    const doneJson = await done.json().catch(() => ({}));
+    const url = falVideoUrl(doneJson);
+    if (!url) throw new Error(falDetail(doneJson) || `DreamActor result HTTP ${done.status} with no video url`);
     const dl = await fetch(url, { signal: AbortSignal.timeout(180_000) });
     if (!dl.ok) throw new Error(`DreamActor download HTTP ${dl.status}`);
     return Buffer.from(await dl.arrayBuffer());

@@ -1,13 +1,13 @@
 import { cn } from "@/lib/cn";
 
-/** Exact file the operator uploaded. No AI redraw, no CSS zoom-crop. */
+/** Tight crop of the uploaded wordmark so it fills the header. Same pixels, not a redraw. */
 export function BrandLogo({ className }: { className?: string }) {
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src="/brand/aios-creator.png"
+      src="/brand/aios-creator-lockup.png"
       alt="AIOS Creator"
-      className={cn("h-12 w-auto object-contain", className)}
+      className={cn("h-14 w-auto object-contain", className)}
     />
   );
 }

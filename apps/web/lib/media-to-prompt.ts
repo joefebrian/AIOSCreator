@@ -29,6 +29,11 @@ export type MediaToPrompt = {
   tokens: number;
 };
 
+/** Vision client. DashScope accounts use qwen3-vl-plus even when the pinned chat model is qwen3.7-plus. */
+export function configuredVisionClient() {
+  return visionConfig();
+}
+
 function visionConfig() {
   const saved = activeProvider();
   const dash = saved && /dashscope|aliyuncs/i.test(saved.baseURL) ? saved : undefined;

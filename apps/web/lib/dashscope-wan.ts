@@ -38,15 +38,24 @@ function wanAccount() {
   return getWanAccount();
 }
 
-function wanApiRoot(baseURL?: string) {
-  const raw = (baseURL || "https://dashscope-intl.aliyuncs.com").trim();
+/** Singapore Model Studio video API. Not China Beijing. */
+export const WAN_SINGAPORE_ROOT = "https://dashscope-intl.aliyuncs.com";
+export const WAN_SINGAPORE_API = `${WAN_SINGAPORE_ROOT}/api/v1`;
+
+export function wanApiRoot(baseURL?: string) {
+  const raw = (baseURL || WAN_SINGAPORE_ROOT).trim();
   try {
     const u = new URL(raw.includes("://") ? raw : `https://${raw}`);
-    if (u.hostname.includes("aliyuncs.com")) return `${u.protocol}//${u.host}`;
+    const host = u.hostname.toLowerCase();
+    if (host.includes("dashscope-intl")) return WAN_SINGAPORE_ROOT;
+    if (host === "dashscope.aliyuncs.com" || host === "dashscope.aliyun.com" || host.endsWith(".aliyun.com")) {
+      return WAN_SINGAPORE_ROOT;
+    }
+    if (host.endsWith(".aliyuncs.com")) return `${u.protocol}//${u.host}`;
   } catch {
     /* ignore */
   }
-  return "https://dashscope-intl.aliyuncs.com";
+  return WAN_SINGAPORE_ROOT;
 }
 
 function mimeFor(path: string) {
@@ -56,32 +65,67 @@ function mimeFor(path: string) {
   return "image/jpeg";
 }
 
+/** I2V: still is ground truth. Prompt may only add motion/camera — unless extra wardrobe refs are attached. */
+function wanMotionPrompt(prompt: string | undefined, hasStill: boolean, wardrobeRef = false) {
+  const body = (prompt || "Natural motion, photoreal, 9:16.").trim().slice(0, 7000);
+  if (!hasStill) return body.slice(0, 8000);
+  if (wardrobeRef) {
+    return [
+      "Image 1 / first frame is the person — keep that face, hair, and body.",
+      "Later reference images are wardrobe/product. She wears those garments.",
+      "Photoreal. One woman.",
+      body,
+    ]
+      .join(" ")
+      .slice(0, 8000);
+  }
+  return [
+    "Animate the first frame only.",
+    "Keep the exact face, hair, clothes, body, and location from the image.",
+    "Do not change outfit, hairstyle, or setting even if the text describes different clothes or a different place.",
+    "The text is motion and camera only.",
+    body,
+  ]
+    .join(" ")
+    .slice(0, 8000);
+}
+
 export async function dashscopeWan3Video(opts: {
   prompt: string;
   stillPath?: string;
+  extraStillPaths?: string[];
   videoUrl?: string;
   durationSec?: number;
   sound?: boolean;
+  /** When false, DashScope does not rewrite the prompt. Use that when the look is already specified. */
+  promptExtend?: boolean;
   engineId?: string;
   jobId?: string;
   ratio?: string;
   onProgress?: (label: string) => void;
 }) {
   const acc = wanAccount();
-  if (!acc?.apiKey) throw new Error("Wan 3.0 needs the Alibaba Wan API key (Singapore).");
+  if (!acc?.apiKey) throw new Error("Wan 3.0 needs the Alibaba Wan API key (Singapore dashscope-intl.aliyuncs.com).");
   const apiRoot = wanApiRoot(acc.baseURL);
 
   const media: { type: string; url: string }[] = [];
+  const extras = (opts.extraStillPaths || []).filter((p) => p && p !== opts.stillPath && fs.existsSync(p)).slice(0, 4);
   if (opts.stillPath && fs.existsSync(opts.stillPath)) {
     const b64 = fs.readFileSync(opts.stillPath).toString("base64");
-    media.push({ type: opts.videoUrl ? "reference_image" : "first_frame", url: `data:${mimeFor(opts.stillPath)};base64,${b64}` });
+    // Wan: first_frame may only pair with last_frame — not reference_image.
+    media.push({
+      type: opts.videoUrl ? "reference_image" : "first_frame",
+      url: `data:${mimeFor(opts.stillPath)};base64,${b64}`,
+    });
   }
+  const hasStill = media.some((m) => m.type === "first_frame" || m.type === "reference_image");
+  const wardrobeRef = extras.length > 0;
   if (opts.videoUrl) media.push({ type: "reference_video", url: opts.videoUrl });
 
   const duration = Math.max(2, Math.min(30, Math.round(opts.durationSec || 5)));
   assertSpendAllowed({ model: opts.engineId === "wan-3-0-std" ? "wan-3-0-std" : "wan-3-0", durationSec: duration });
   const engineId = opts.engineId === "wan-3-0-std" ? "wan-3-0-std" : "wan-3-0";
-  const slug = engineId === "wan-3-0-std" ? "wan3.0-video" : "wan3.0-video-prime";
+  let slug = engineId === "wan-3-0-std" ? "wan3.0-video" : "wan3.0-video-prime";
   const ratio = (opts.ratio || "9:16").trim() || "9:16";
   const t0 = Date.now();
   const log = (ok: boolean, extra?: { status?: number; error?: string }) => {
@@ -114,7 +158,7 @@ export async function dashscopeWan3Video(opts: {
       body: JSON.stringify({
         model: slug,
         input: {
-          prompt: (opts.prompt || "Natural motion, photoreal, 9:16.").slice(0, 8000),
+          prompt: wanMotionPrompt(opts.prompt, hasStill, wardrobeRef),
           ...(media.length ? { media } : {}),
         },
         parameters: {
@@ -122,14 +166,51 @@ export async function dashscopeWan3Video(opts: {
           ratio,
           duration,
           audio: opts.sound !== false,
-          prompt_extend: true,
+          // LLM rewrite invents a new costume/location and fights the first frame.
+          prompt_extend: opts.promptExtend ?? !hasStill,
           watermark: false,
         },
       }),
       signal: AbortSignal.timeout(60_000),
     });
-    const createdJson = (await created.json().catch(() => ({}))) as WanTask;
-    if (!created.ok || createdJson.code) {
+    let createdJson = (await created.json().catch(() => ({}))) as WanTask;
+    const primeBlocked =
+      slug === "wan3.0-video-prime" &&
+      /x-dashaigc-stage-capability|wan3_base|unknown.*prime/i.test(
+        `${createdJson.message || ""} ${createdJson.code || ""} ${createdJson.output?.message || ""}`,
+      );
+    if ((!created.ok || createdJson.code) && primeBlocked) {
+      slug = "wan3.0-video";
+      opts.onProgress?.("Wan Prime not on this key — Wan 3.0 std…");
+      const retry = await fetchRetry(`${apiRoot}/api/v1/services/aigc/video-generation/video-synthesis`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${acc.apiKey}`,
+          "Content-Type": "application/json",
+          "X-DashScope-Async": "enable",
+        },
+        body: JSON.stringify({
+          model: slug,
+          input: {
+            prompt: wanMotionPrompt(opts.prompt, hasStill, wardrobeRef),
+            ...(media.length ? { media } : {}),
+          },
+          parameters: {
+            resolution: "720P",
+            ratio,
+            duration,
+            audio: opts.sound !== false,
+            prompt_extend: opts.promptExtend ?? !hasStill,
+            watermark: false,
+          },
+        }),
+        signal: AbortSignal.timeout(60_000),
+      });
+      createdJson = (await retry.json().catch(() => ({}))) as WanTask;
+      if (!retry.ok || createdJson.code) {
+        throw cloudHttpError(retry.status, createdJson.message || createdJson.code || `Wan HTTP ${retry.status}`);
+      }
+    } else if (!created.ok || createdJson.code) {
       throw cloudHttpError(created.status, createdJson.message || createdJson.code || `Wan HTTP ${created.status}`);
     }
     const taskId = createdJson.output?.task_id;

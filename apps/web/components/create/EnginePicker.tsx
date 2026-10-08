@@ -153,7 +153,7 @@ export function EnginePicker({
       {genLine}
       {current ? (
         <p className="mt-2 text-[12px] leading-snug text-[#4B5563]">
-          <span className="font-semibold text-[#652DFF]">Bagus buat</span>
+          <span className="font-semibold text-[#652DFF]">Good for</span>
           {current.useFor ? ` · ${current.useFor}` : ""}
           {" — "}
           {current.tip}

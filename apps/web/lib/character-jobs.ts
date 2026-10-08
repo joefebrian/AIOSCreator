@@ -11,8 +11,10 @@ import {
   FACE_ONLY_SCENE_LOCK,
   ONE_PERSON_LOCK,
   POSE_LOOK_REAL_BASE,
+  POSE_LOOK_REAL_FOLLOW_CHARACTER,
   POSE_LOOK_REAL_FOLLOW_LOOK,
   POSE_LOOK_REAL_FOLLOW_TEXT,
+  POSE_LOOK_REAL_OPERATOR,
   SKIN_LOCK,
   IDENTITY_PLATE_PROMPT,
   KEEP_FACE_GENERATOR_PREFIX,
@@ -26,10 +28,15 @@ import { isCloudImageEngine } from "./cloud-image";
 import { imageEngine, listEngines } from "./engines";
 import { resolveRoute } from "./model-routes";
 import { generateStill } from "./stills";
-import { compileCharacterPrompt, withAvoidList } from "./prompt-compile";
+import { compileCharacterPrompt, looksLikeNewPhotoshoot, withAvoidList } from "./prompt-compile";
+import { learnLookFromGenerate } from "./learn-looks";
 import { cropIdentityFace } from "./crop-face";
-import { characterLook, compileLockedPrompt, deriveLook, isMinorLook, lookHairNegative, lookSkinNegative, operatorSetsScene, operatorWantsUndress, prepareOperatorPrompt, UNDRESS_INSTRUCTION, UNDRESS_NEGATIVE } from "./look-lock";
-import { characterStillRefs } from "./still-refs";
+import { BARE_CHEST_INSTRUCTION, BARE_CHEST_NEGATIVE, calmDriftFaceWording, characterLook, compileGenerateChatPrompt, compileKleinGeneratePrompt, compileLockedPrompt, compileQwen21GeneratePrompt, compileQwen21ScenePrompt, deriveLook, driftEngineFaceLock, driftTryOnPrompt, fillEmptyPlaceFromMood, fitSceneToCharacter, isMinorLook, localEditFaceLock, lookHairNegative, lookSkinNegative, operatorWantsBareChest, operatorWantsUndress, prepareOperatorPrompt, tryOnBaselineCrop, tryOnInPlace, UNDRESS_INSTRUCTION, UNDRESS_NEGATIVE, usesDriftTryOnFace } from "./look-lock";
+
+import { characterGenerateRefs, characterStillRefs, framingFromPrompt, viggleBodyPlate, viggleGeneratePrompt } from "./still-refs";
+import { arrangeLooseKerangka, compilePresetKerangka, isAdultPresetPrompt, parseExternalKerangka, plateFromSubjectBlock, readPresetBlocks } from "./prompt-presets";
+import { compileShotPrompt, shotById, type ShotPlate } from "./shot-presets";
+import { isProductTryOnEngine, isTryOnEngine, TRYON_PROMPT } from "./virtual-tryon";
 import { composeProductRefs, ffmpegStill4k } from "./motion";
 import { rememberProductUrls } from "./product-assets";
 import { dashscopeWan3Video } from "./dashscope-wan";
@@ -57,27 +64,52 @@ function startJob(input: string, model: string, characterId?: string): Job {
   return job;
 }
 
-/** Workspace stills follow the selected image engine. Identity create stays GPT 2.5. */
-function characterEditEngine(mode?: string, opts?: { undress?: boolean }) {
-  if (mode === "pose-real") {
-    const id = imageEngine().id;
-    const ok = new Set(["qwen-image-edit", "seedream-5-pro", "seedream-4-5", "gpt-image-2", "gpt-image-2.5", "klein-qwen"]);
-    if (ok.has(id)) return id;
-    const qwen = listEngines().find((e) => e.id === "qwen-image-edit");
-    if (qwen?.status === "ready") return "qwen-image-edit";
-    throw new Error("Clone Image: pick Qwen Image Edit, Seedream, or GPT Image 2.");
-  }
+/** Z-Image is Studio/UGC only. Character Generate/Clone/Edit never keep it as the engine. */
+function characterStillEngineId(mode?: string) {
   const id = imageEngine().id;
-  const qwen = listEngines().find((e) => e.id === "qwen-image-edit");
-  const localGen = id === "flux2-klein-4b" || id === "z-image-turbo" || id === "klein-qwen" || id === "flux2-klein-base-9b";
+  if (id === "z-image-turbo" || (isTryOnEngine(id) && mode !== "product")) {
+    const qwen = listEngines().find((e) => e.id === "qwen-image-2.1");
+    if (qwen?.status === "ready") return "qwen-image-2.1";
+  }
+  return id;
+}
+
+function isLocalQwen21(id?: string) {
+  return id === "qwen-image-2.1" || id === "qwen-image-2.1-gguf";
+}
+
+/** Workspace stills follow the picker. Local Qwen 2.1 is never swapped to Muse (Meta policy). */
+function characterEditEngine(mode?: string, opts?: { undress?: boolean; faceBody?: boolean; requested?: string }) {
+  const requested = (opts?.requested || "").trim();
+  if (mode === "face-swap") return "reactor";
+  if (isLocalQwen21(requested)) return requested;
+  if (mode === "pose-real") {
+    return requested || "muse-image-1.0";
+  }
+  if (mode === "product") {
+    if (requested && (isProductTryOnEngine(requested) || isTryOnEngine(requested))) return requested;
+    return "muse-image-1.0";
+  }
+  if (requested) return requested;
+  const id = characterStillEngineId(mode);
+  const qwen = listEngines().find((e) => e.id === "qwen-image-2.1");
+  const localGen = id === "flux2-klein-4b" || id === "flux2-klein-base-9b";
+  if (mode === "scene" && localGen && qwen?.status === "ready") {
+    return "qwen-image-2.1";
+  }
+  if (mode === "face-swap") {
+    return "reactor";
+  }
   if (
-    (mode === "face-swap" || mode === "repair" || mode === "product" || opts?.undress) &&
+    (mode === "repair" || mode === "product" || opts?.undress) &&
     localGen
   ) {
-    if (qwen?.status === "ready") return "qwen-image-edit";
+    if (qwen?.status === "ready") return "qwen-image-2.1";
   }
-  if (opts?.undress && isCloudImageEngine(id) && qwen?.status === "ready") {
-    return "qwen-image-edit";
+  if (opts?.undress) {
+    const grok = listEngines().find((e) => e.id === "grok-imagine");
+    if (grok?.status === "ready") return "grok-imagine";
+    if (isCloudImageEngine(id) && qwen?.status === "ready") return "qwen-image-2.1";
   }
   return id;
 }
@@ -90,7 +122,7 @@ function collectExtraUrls(body: { extraUrl?: unknown; extraUrls?: unknown }): st
   };
   push(body.extraUrl);
   push(body.extraUrls);
-  return [...new Set(out)].slice(0, 3);
+  return [...new Set(out)].slice(0, 6);
 }
 
 async function fillBodyIfMissing(id: string) {
@@ -102,8 +134,8 @@ async function fillBodyIfMissing(id: string) {
   if (!fs.existsSync(face)) return;
   const dest = characterSlotFile(id, "front", "png");
   const mediaUrl = characterSlotUrl(id, "front", "png");
-  const engineId = characterEditEngine();
-  const job = startJob(BODY_LOCK_PROMPT, `${engineId}-body`, id);
+  const engineId = COMPLETE_SET_ENGINE;
+  const job = startJob(BODY_LOCK_PROMPT, engineId, id);
   setSlot(id, "front", { jobId: job.id, prompt: BODY_LOCK_PROMPT });
   try {
     const { buffer } = await generateStill(BODY_LOCK_PROMPT, { face }, engineId, {
@@ -280,7 +312,7 @@ export async function runSlot(req: Request, id: string) {
   const mediaUrl = characterSlotUrl(id, key, "png");
 
   if (key === "sheet") {
-    const setEngine = characterEditEngine();
+    const setEngine = COMPLETE_SET_ENGINE;
     const job = startJob("complete set headshot · 3/4 · full body", setEngine, id);
     const pending = setSlot(id, key, { jobId: job.id, prompt: "complete-set" });
     after(async () => {
@@ -318,11 +350,12 @@ export async function runSlot(req: Request, id: string) {
     return NextResponse.json({ ...pending, jobId: job.id, pending: "sheet" }, { status: 202 });
   }
 
-  const job = startJob(prompt, `${characterEditEngine()}-ref`, id);
+  const slotEngine = (COMPLETE_SET_KEYS as readonly string[]).includes(key) ? COMPLETE_SET_ENGINE : characterEditEngine();
+  const job = startJob(prompt, `${slotEngine}-ref`, id);
   const next = setSlot(id, key, { jobId: job.id, prompt });
   after(async () => {
     try {
-      const { buffer } = await generateStill(prompt, characterStillRefs(getCharacter(id)!), characterEditEngine(), {
+      const { buffer } = await generateStill(prompt, characterStillRefs(getCharacter(id)!), slotEngine, {
         kind: "restyle",
       });
       fs.writeFileSync(dest, buffer);
@@ -383,26 +416,28 @@ function editPrompt(
   hasBody: boolean,
   engineId: string,
   productCount = 0,
-  otherFace = false,
   aspect = "9:16",
+  scenePreset = "",
 ) {
   const extra = user.trim();
-  const qwen = engineId === "qwen-image-edit" || engineId === "klein-qwen";
+  const qwen =
+    engineId === "qwen-image-2.1" ||
+    engineId === "qwen-image-2.1" ||
+    engineId === "qwen-image-2.1-gguf";
   const lock = hasBody ? FACE_BODY_SCENE_LOCK : FACE_ONLY_SCENE_LOCK;
+  if (isTryOnEngine(engineId) || (mode === "product" && isProductTryOnEngine(engineId))) {
+    return extra ? `${TRYON_PROMPT} ${extra}` : TRYON_PROMPT;
+  }
+  if (mode === "chat") return extra;
   if (mode === "pose-real") {
-    if (extra) {
-      return `${POSE_LOOK_REAL_BASE} ${POSE_LOOK_REAL_FOLLOW_TEXT} Operator pose: ${extra} Photoreal.`.trim();
+    const poseText = extra.replace(/(?:^|\n)Avoid:\s*[\s\S]*$/i, "").trim();
+    if (poseText) {
+      return `${POSE_LOOK_REAL_BASE} ${POSE_LOOK_REAL_FOLLOW_TEXT} ${POSE_LOOK_REAL_OPERATOR} Operator: ${poseText} Photoreal.`.trim();
     }
-    return `${POSE_LOOK_REAL_BASE} ${POSE_LOOK_REAL_FOLLOW_LOOK} Photoreal.`;
+    return `${POSE_LOOK_REAL_BASE} ${POSE_LOOK_REAL_FOLLOW_CHARACTER} Photoreal.`;
   }
   if (mode === "face-swap") {
-    if (otherFace) {
-      return `Image 1 is the BODY / pose / clothes / scene to keep. Image 2 is the FACE from another character — not @${name}. Put Image 2's face, skin tone, and hair onto the person in Image 1. Keep Image 1's body, posture, wardrobe, lighting, crop, and scene. Do not keep @${name}'s face. ${ONE_PERSON_LOCK} Exactly two arms and two hands. Photoreal. ${extra}`.trim();
-    }
-    if (qwen) {
-      return `Image 1 is the pose/scene to keep. Image 2 is @${name}'s FACE lock. The person in image 1 must become @${name}: same face, same skin, same hair. Keep only pose, camera, crop, clothing, lighting, and scene from image 1. ${ONE_PERSON_LOCK} Photoreal. ${extra}`.trim();
-    }
-    return `The reference image is the pose, camera, crop, lighting, and scene to keep. The person in it must become @${name}: same face, same skin, same hair. Do not keep the reference person's identity. ${ONE_PERSON_LOCK} Photoreal. ${extra}`.trim();
+    return `Image 1 is the pose, body, clothes, camera, crop, lighting, and scene to keep. Image 2 is @${name}'s FACE lock. The person in Image 1 must become @${name}: same face, same skin, same hair. Keep only pose, wardrobe, and scene from Image 1. Do not keep the pose-photo's original face. ${ONE_PERSON_LOCK} Photoreal. ${extra}`.trim();
   }
   if (mode === "product") {
     const extraViews =
@@ -417,6 +452,14 @@ function editPrompt(
   }
   if (mode === "bg") {
     return `${lock} @${name}. Remove the background. Clean cutout or seamless studio, keep the person sharp. ${extra}`.trim();
+  }
+  if (mode === "scene") {
+    const place = [scenePreset, extra.replace(/(?:^|\n)Avoid:\s*[\s\S]*$/i, "").trim()].filter(Boolean).join("\n").trim();
+    const extraHint =
+      productCount > 0
+        ? ` Image 2${productCount > 1 ? "/3" : ""}${productCount > 2 ? "/4" : ""} are extra stills. If a slot is a person, keep that person's face and body in the frame; their pose and action follow the operator text. If a slot is a place/object, use it as scene or prop. Do not invent extra people who are not in Image 1–4.`
+        : "";
+    return `Image 1 is the photograph to keep. Same woman, face, hair, clothes, pose, and crop. Change only the background and lighting behind her. Do not write a new photoshoot. Do not change outfit or pose. Do not remove her from the frame. The new place must look like a real camera photo, not 3D or Unreal.${extraHint} ${place}`.trim();
   }
   if (mode === "repair") {
     return `Keep this photograph: same face, pose, clothes, and scene. Exactly two arms and two hands. Remove any extra arm or extra hand. Cigarette in at most one hand. Photoreal. ${extra}`.trim();
@@ -441,10 +484,24 @@ export async function runEdit(req: Request, id: string) {
     extraUrl?: string | string[];
     extraUrls?: string[];
     aspect?: string;
+    presetPrompt?: string;
+    presetBlocks?: Record<string, string>;
+    presetPlate?: string;
+    shotId?: string;
+    engineId?: string;
   };
   let baseUrl = (body.baseUrl ?? "").trim();
   let mode = (body.mode ?? "chat").trim();
   if (!baseUrl) return NextResponse.json({ error: "select or upload a base image" }, { status: 400 });
+  if (mode === "scene" && collectExtraUrls(body).length === 0 && looksLikeNewPhotoshoot(body.prompt ?? "")) {
+    return NextResponse.json(
+      {
+        error:
+          "That prompt is a new photoshoot. Use Generate image (face + body lock, new pose/clothes/place). Chat to edit only changes the backdrop of the selected still.",
+      },
+      { status: 400 },
+    );
+  }
   if (mode === "upscale") {
     const slot =
       baseUrl === row.identityUrl
@@ -459,24 +516,81 @@ export async function runEdit(req: Request, id: string) {
   const compiled = compileCharacterPrompt(body.prompt ?? "");
   const look = characterLook(row);
   const prepared = prepareOperatorPrompt(compiled.creative, look);
+  const outside = parseExternalKerangka(prepared.creative);
+  const loose = outside ? null : arrangeLooseKerangka(prepared.creative);
+  const fittedOp = outside || loose ? { text: prepared.creative, changed: false } : fitSceneToCharacter(prepared.creative, look);
+  if (fittedOp.changed) {
+    prepared.creative = fittedOp.text;
+    prepared.warnings.push("Prompt described another woman. Face, hair, and skin stayed this character.");
+  }
   const undressAsk =
     !isMinorLook(look) &&
-    (operatorWantsUndress(compiled.creative) || operatorWantsUndress(body.prompt ?? ""));
+    (operatorWantsUndress(compiled.creative) || operatorWantsUndress(body.prompt ?? "") || operatorWantsUndress(String(body.presetPrompt || "")));
+  const bareChestAsk =
+    !isMinorLook(look) &&
+    !undressAsk &&
+    (operatorWantsBareChest(compiled.creative) ||
+      operatorWantsBareChest(body.prompt ?? "") ||
+      operatorWantsBareChest(String(body.presetPrompt || "")));
   let user = withAvoidList(
     prepared.creative,
-    [compiled.negative, lookHairNegative(look), lookSkinNegative(), undressAsk ? UNDRESS_NEGATIVE : ""].filter(Boolean).join(", "),
+    [compiled.negative, lookHairNegative(look), lookSkinNegative(), undressAsk ? UNDRESS_NEGATIVE : bareChestAsk ? BARE_CHEST_NEGATIVE : ""]
+      .filter(Boolean)
+      .join(", "),
   );
-  if (!user && mode === "chat") {
-    return NextResponse.json({ error: "describe the edit" }, { status: 400 });
+  const shot = mode === "chat" ? shotById(String(body.shotId || "")) : undefined;
+  let presetBlocks = mode === "chat" ? readPresetBlocks(body.presetBlocks) : {};
+  let hasPresetBlocks = Object.keys(presetBlocks).length > 0;
+  if (!hasPresetBlocks && !shot && (outside || loose)) {
+    presetBlocks = (outside || loose)!;
+    hasPresetBlocks = true;
+    prepared.warnings.push(outside ? "Outside prompt arranged into the eight blocks." : "Loose prompt arranged into the eight blocks.");
+  }
+  let placeFromMood = false;
+  if ((outside || loose) && hasPresetBlocks && !(presetBlocks.background || "").trim()) {
+    const filled = await fillEmptyPlaceFromMood(presetBlocks);
+    if (filled) {
+      presetBlocks = { ...presetBlocks, background: filled.text };
+      placeFromMood = true;
+    }
+  }
+  const plateRaw = String(body.presetPlate || "");
+  const presetPlate: ShotPlate | undefined = hasPresetBlocks
+    ? plateRaw === "headshot" || plateRaw === "three_quarter" || plateRaw === "full"
+      ? plateRaw
+      : plateFromSubjectBlock(presetBlocks.subject || "")
+    : undefined;
+  if (shot?.nsfw && isMinorLook(look)) {
+    return NextResponse.json({ error: "That shot is 18+." }, { status: 400 });
+  }
+  if (
+    isMinorLook(look) &&
+    (presetBlocks.adult || Object.values(presetBlocks).some((text) => isAdultPresetPrompt(text)))
+  ) {
+    return NextResponse.json({ error: "That preset is 18+." }, { status: 400 });
+  }
+  if (
+    mode === "retouch" &&
+    isMinorLook(look) &&
+    /\b(bikini|nude|naked|lingerie|underwear|undress)\b/i.test(body.prompt ?? "")
+  ) {
+    return NextResponse.json({ error: "That edit is 18+." }, { status: 400 });
+  }
+  if (
+    !user.replace(/\nAvoid:\s*[\s\S]*$/i, "").trim() &&
+    (mode === "chat" || mode === "scene") &&
+    !String(body.presetPrompt || "").trim() &&
+    !shot &&
+    !hasPresetBlocks
+  ) {
+    return NextResponse.json({ error: "pick a preset or describe pose / clothes / place" }, { status: 400 });
   }
   if (mode === "pose-real") {
     const bodyLock = row.slots.find((s) => s.key === "front" && s.url)?.url || "";
-    if (!baseUrl || baseUrl === (row.identityUrl || "")) {
-      if (!bodyLock) {
-        return NextResponse.json({ error: "need BODY LOCK (full body). Run Complete set first." }, { status: 400 });
-      }
-      baseUrl = bodyLock;
+    if (!row.identityUrl && !bodyLock) {
+      return NextResponse.json({ error: "need FACE + BODY lock. Run Complete set first." }, { status: 400 });
     }
+    if (!baseUrl) baseUrl = row.identityUrl || bodyLock;
     const extrasNow = collectExtraUrls(body);
     if (!extrasNow[0]) {
       return NextResponse.json({ error: "pick a look / illustration" }, { status: 400 });
@@ -485,26 +599,18 @@ export async function runEdit(req: Request, id: string) {
   const extras = collectExtraUrls(body);
   const extra = extras[0] || "";
   const lockUrl = row.identityUrl || baseUrl;
-  if (mode === "chat" && compiled.needsSceneRef) {
-    const pose = extra && extra !== lockUrl ? extra : baseUrl && baseUrl !== lockUrl ? baseUrl : "";
-    if (!pose) {
-      return NextResponse.json(
-        {
-          error:
-            "This prompt keeps pose from a second photo. Attach it with + Additional image (or drop it on Pose/lighting ref in Generate image).",
-        },
-        { status: 400 },
-      );
+  if (mode === "face-swap") {
+    if (!row.identityUrl) {
+      return NextResponse.json({ error: "need FACE lock. Run Complete set first." }, { status: 400 });
     }
-    mode = "face-swap";
-    body.baseUrl = pose;
+    if (!baseUrl || baseUrl === row.identityUrl) {
+      return NextResponse.json({ error: "pick another character's still (pose / clothes), not this identity plate" }, { status: 400 });
+    }
   }
-  const donorFace = mode === "face-swap" && extra && extra !== lockUrl ? extra : "";
-  const sceneUrl = (mode === "face-swap" ? baseUrl : baseUrl).trim();
   if (mode === "product" && extras.length < 1) {
     return NextResponse.json({ error: "upload a product image" }, { status: 400 });
   }
-  const src = mediaUrlToPath(mode === "product" ? lockUrl : mode === "face-swap" ? sceneUrl : baseUrl);
+  const src = mediaUrlToPath(mode === "product" ? baseUrl || lockUrl : baseUrl);
   if (!fs.existsSync(src)) return NextResponse.json({ error: "base image not on disk" }, { status: 400 });
 
   const editId = randomUUID();
@@ -512,37 +618,170 @@ export async function runEdit(req: Request, id: string) {
   const mediaUrl = characterSlotUrl(id, `edit-${editId.slice(0, 8)}`, "png");
   let engineId: string;
   try {
-    engineId = characterEditEngine(mode, { undress: undressAsk });
+    engineId = characterEditEngine(mode, {
+      undress: undressAsk,
+      faceBody: mode === "chat" && Boolean(characterStillRefs(row).body),
+      requested: body.engineId,
+    });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 400 });
   }
-  const skipRevamp = isCloudImageEngine(engineId);
   let promptWarnings = prepared.warnings;
-  if (undressAsk && engineId === "qwen-image-edit" && isCloudImageEngine(imageEngine().id)) {
+  if (undressAsk && engineId === "qwen-image-2.1" && isCloudImageEngine(imageEngine().id)) {
     promptWarnings = [...promptWarnings, "GPT Image / Seedream block NSFW. This job used Qwen Image Edit (local)."];
   }
-  if (mode === "chat") {
-    const locked = await compileLockedPrompt(prepared.creative, row.name, look, { skipRevamp });
-    user = withAvoidList(
-      locked.prompt,
-      [compiled.negative, lookHairNegative(look), lookSkinNegative(), undressAsk ? UNDRESS_NEGATIVE : ""].filter(Boolean).join(", "),
+  if (isTryOnEngine(engineId) || (mode === "product" && isProductTryOnEngine(engineId))) {
+    const extraText = prepared.creative.replace(/(?:^|\n)Avoid:\s*[\s\S]*$/i, "").trim();
+    const count =
+      extras.length > 1 ? ` Image 2 is a ${extras.length}-item SKU sheet. Apply all ${extras.length} products, not only the first.` : "";
+    const crop = tryOnBaselineCrop(src);
+    const cropWarning =
+      crop === "three_quarter" ? "3/4 crop stays. Feet stay out." : crop === "headshot" ? "Headshot crop stays." : "Full-body crop.";
+    if (usesDriftTryOnFace(engineId)) {
+      const head = characterStillRefs(row).face;
+      const hasBody = Boolean(head && src !== head && fs.existsSync(src));
+      user = driftTryOnPrompt(extraText, extras.length, hasBody, crop);
+      promptWarnings = [
+        ...promptWarnings,
+        hasBody
+          ? "Muse try-on. Image 1 is the headshot. Image 2 is the SKU. Image 3 is the body plate."
+          : "Muse try-on. Image 1 is the headshot. Image 2 is the SKU.",
+        "A new place uses that place's light.",
+        cropWarning,
+      ];
+    } else {
+      user = [extraText ? `${TRYON_PROMPT}${count}\n${extraText}` : `${TRYON_PROMPT}${count}`, tryOnInPlace(crop)]
+        .filter(Boolean)
+        .join("\n");
+      promptWarnings = [...promptWarnings, "A new place uses that place's light.", cropWarning];
+    }
+  } else if (mode === "pose-real") {
+    const followLook = String((body as { clonePose?: string }).clonePose || "character") === "look";
+    const note = prepared.creative.replace(/(?:^|\n)Avoid:\s*[\s\S]*$/i, "").trim();
+    user = note
+      ? `${POSE_LOOK_REAL_BASE} ${followLook ? POSE_LOOK_REAL_FOLLOW_LOOK : POSE_LOOK_REAL_FOLLOW_CHARACTER} ${POSE_LOOK_REAL_OPERATOR} Operator: ${note} Photoreal.`
+      : `${POSE_LOOK_REAL_BASE} ${followLook ? POSE_LOOK_REAL_FOLLOW_LOOK : POSE_LOOK_REAL_FOLLOW_CHARACTER} Photoreal.`;
+  } else if (mode === "chat" && shot) {
+    const compiled = compileShotPrompt(shot, look.hair || "").trim();
+    const raw = (body.prompt ?? "").trim();
+    const pose = shot.pose.trim().slice(0, 42);
+    const inBox = pose.length >= 24 && raw.includes("[SUBJECT]") && raw.includes(pose);
+    if (inBox) {
+      user = raw;
+      promptWarnings = ["Shot is in the description. Chips ignored."];
+    } else {
+      const note = prepared.creative.replace(/\nAvoid:\s*[\s\S]*$/i, "").trim();
+      user = [compiled, note ? `Operator note: ${note}` : ""].filter(Boolean).join("\n\n");
+      promptWarnings = ["Shot preset. Eight-block frame sent as written. Chips ignored."];
+    }
+  } else if (mode === "chat" && hasPresetBlocks) {
+    const note = outside || loose
+      ? ""
+      : prepared.creative.replace(/\n(?:Avoid|Negative prompt)\s*:\s*[\s\S]*$/i, "").trim();
+    const fittedBlocks: Record<string, string> = {};
+    let blockFit = false;
+    for (const [key, value] of Object.entries(presetBlocks)) {
+      const fitted = fitSceneToCharacter(value, look);
+      fittedBlocks[key] = fitted.text;
+      if (fitted.changed) blockFit = true;
+    }
+    user = [compilePresetKerangka(fittedBlocks, look.hair || ""), note ? `Operator note: ${note}` : ""]
+      .filter(Boolean)
+      .join("\n\n");
+    promptWarnings = [
+      placeFromMood
+        ? "Preset kerangka. Each block tightened to its own job. Empty place filled from the outfit mood."
+        : "Preset kerangka. Each block tightened to its own job. Not an LLM rewrite.",
+      ...(outside ? ["Outside prompt arranged into the eight blocks."] : []),
+      ...(loose ? ["Loose prompt arranged into the eight blocks."] : []),
+      ...(placeFromMood ? ["Empty place filled from the outfit mood."] : []),
+      ...(blockFit ? ["Prompt described another woman. Face, hair, and skin stayed this character."] : []),
+    ];
+  } else if (mode === "chat" && engineId === "qwen-image-2.1-viggle") {
+    const plate = viggleBodyPlate(row);
+    if (!plate) {
+      return NextResponse.json(
+        { error: "Viggle needs a 3/4 body still. Complete set 3/4 first. Headshot is not used as Image 1." },
+        { status: 400 },
+      );
+    }
+    const viggle = viggleGeneratePrompt(row.name, prepared.creative, plate.kind);
+    user = viggle.prompt;
+    if (viggle.changed) promptWarnings = [...promptWarnings, "Viggle rewrote a close-up into a medium 3/4 shot."];
+    promptWarnings = [...promptWarnings, `Viggle Image 1 = ${plate.kind} plate. Headshot not sent.`];
+  } else if (mode === "chat") {
+    const qwen21 = engineId === "qwen-image-2.1" || engineId === "qwen-image-2.1-gguf";
+    const skipClothedBody = qwen21 && (undressAsk || bareChestAsk);
+    const framing = skipClothedBody
+      ? "close"
+      : framingFromPrompt(
+          [String(body.presetPrompt || "").trim(), prepared.creative].filter(Boolean).join("\n"),
+        );
+    const locked = await compileGenerateChatPrompt(
+      prepared.creative,
+      row.name,
+      fitSceneToCharacter(String(body.presetPrompt || ""), look).text,
+      framing,
+      look,
     );
+    user = [
+      locked.prompt,
+      undressAsk ? UNDRESS_INSTRUCTION : bareChestAsk ? BARE_CHEST_INSTRUCTION : "",
+      compiled.negative ? `Negative prompt: ${compiled.negative}` : "",
+      undressAsk ? UNDRESS_NEGATIVE : bareChestAsk ? BARE_CHEST_NEGATIVE : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
     promptWarnings = [...new Set([...prepared.warnings, ...locked.warnings])];
+  } else if (mode === "retouch") {
+    const note = prepared.creative.replace(/\n(?:Avoid|Negative prompt)\s*:\s*[\s\S]*$/i, "").trim();
+    const clothes = undressAsk
+      ? UNDRESS_INSTRUCTION
+      : bareChestAsk
+        ? BARE_CHEST_INSTRUCTION
+        : "Change the clothes to the note. The outfit in the photograph is gone. Do not keep that outfit.";
+    const garmentRef = !undressAsk && extras.length ? "Image 2 is the garment to put on her." : "";
+    const noteLine = undressAsk ? "" : note ? `Note: ${note}` : "";
+    user = [
+      "IMAGE EDIT of <image1>. This photograph is the one to change.",
+      "Keep her face, hair, pose, crop, and the place. Do not keep the clothes.",
+      clothes,
+      garmentRef,
+      noteLine,
+      undressAsk ? `Avoid: ${UNDRESS_NEGATIVE}` : "",
+      "One woman. Real photograph, pores visible. Not a new person.",
+    ]
+      .filter(Boolean)
+      .join("\n");
+    promptWarnings = [...promptWarnings, "Edit image. Clothes follow the note. Face, pose, and place stay."];
+  } else if (mode === "scene" && (engineId === "qwen-image-2.1" || engineId === "qwen-image-2.1-gguf")) {
+    const scene = await compileQwen21ScenePrompt(prepared.creative, String(body.presetPrompt || "").trim());
+    user = scene.prompt;
+    promptWarnings = [...new Set([...prepared.warnings, ...scene.warnings])];
   }
   const aspect = parseImageAspect(body.aspect);
   const canvas = sizeForAspect(aspect);
-  const prompt = editPrompt(
+  const qwen21Scene = mode === "scene" && (engineId === "qwen-image-2.1" || engineId === "qwen-image-2.1-gguf");
+  const viggleChat = mode === "chat" && engineId === "qwen-image-2.1-viggle";
+  const prompt = viggleChat || qwen21Scene || mode === "retouch" || mode === "pose-real" || isTryOnEngine(engineId) || (mode === "product" && isProductTryOnEngine(engineId))
+    ? user
+    : editPrompt(
     mode,
     user,
     row.name,
     mode === "face-swap" ? false : Boolean(characterStillRefs(row).body),
     engineId,
     extras.length,
-    Boolean(donorFace),
     aspect,
+    String(body.presetPrompt || "").trim(),
   );
+  const driftLock = mode === "chat" ? driftEngineFaceLock(engineId) : "";
+  const localLock = mode === "chat" ? localEditFaceLock(engineId) : "";
+  const faceLock = [driftLock, localLock].filter(Boolean).join("\n");
+  const voicedBody = faceLock ? calmDriftFaceWording(prompt) : prompt;
+  const voiced = faceLock ? `${faceLock}\n\n${voicedBody}` : voicedBody;
   const fullPrompt =
-    extra && mode !== "product" && mode !== "pose-real" ? `${prompt} Additional guidance image provided.` : prompt;
+    extra && mode !== "product" && mode !== "pose-real" ? `${voiced} Additional guidance image provided.` : voiced;
   const job = startJob(fullPrompt, engineId, id);
   after(async () => {
     try {
@@ -551,6 +790,21 @@ export async function runEdit(req: Request, id: string) {
       if (mode === "product") {
         const productPaths = extras.map((u) => mediaUrlToPath(u));
         if (productPaths.some((p) => !fs.existsSync(p))) throw new Error("product image not on disk");
+        if (isTryOnEngine(engineId) || isProductTryOnEngine(engineId)) {
+          rememberProductUrls(extras, `try-on · ${row.name}`);
+          let skuSheet = productPaths[0]!;
+          if (productPaths.length > 1) {
+            skuSheet = characterSlotFile(id, `sku-sheet-${editId.slice(0, 8)}`, "png");
+            await composeProductRefs(productPaths, skuSheet);
+          }
+          if (usesDriftTryOnFace(engineId)) {
+            const head = characterStillRefs(getCharacter(id)!).face;
+            const face = head && fs.existsSync(head) ? head : src;
+            refs = { face, body: skuSheet, scene: src !== face && fs.existsSync(src) ? src : undefined };
+          } else {
+            refs = { face: src, body: skuSheet };
+          }
+        } else {
         const p1 = characterSlotFile(id, `product-1-${editId.slice(0, 8)}`, "png");
         await composeProductRefs([productPaths[0]], p1);
         let extraViews: string | undefined;
@@ -560,38 +814,83 @@ export async function runEdit(req: Request, id: string) {
         }
         rememberProductUrls(extras, `SKU · ${row.name}`);
         refs = { face: src, body: p1, scene: extraViews };
+        }
       } else if (mode === "repair") {
         refs = { face: src };
       } else if (mode === "pose-real") {
         const lookPath = extra && extra !== lockUrl && extra !== baseUrl ? mediaUrlToPath(extra) : "";
         if (!lookPath || !fs.existsSync(lookPath)) throw new Error("pick a look / illustration");
-        refs = { face: src, body: lookPath };
+        const plates = characterStillRefs(getCharacter(id)!);
+        const facePath = plates.face || (lockUrl ? mediaUrlToPath(lockUrl) : src);
+        const qwenEdit =
+          engineId === "qwen-image-2.1" ||
+          engineId === "qwen-image-2.1-gguf" ||
+          engineId === "qwen-image-2.1" ||
+          engineId === "qwen-image-3.0";
+        refs = {
+          face: fs.existsSync(facePath) ? facePath : src,
+          body: qwenEdit ? undefined : plates.body && plates.body !== facePath ? plates.body : undefined,
+          scene: lookPath,
+        };
       } else if (mode === "face-swap") {
-        const donorPath = mediaUrlToPath(donorFace || extra || lockUrl);
-        if (!fs.existsSync(donorPath)) throw new Error("donor face not on disk");
+        const plates = characterStillRefs(getCharacter(id)!);
+        const faceSrc = plates.face || mediaUrlToPath(row.identityUrl || "");
+        if (!faceSrc || !fs.existsSync(faceSrc)) throw new Error("need FACE lock");
         const crop = characterSlotFile(id, `face-crop-${editId.slice(0, 8)}`, "png");
-        const face = await cropIdentityFace(donorPath, crop);
+        const face = await cropIdentityFace(faceSrc, crop);
         refs = { face, scene: src };
+      } else if (mode === "scene" || mode === "retouch") {
+        const extraPaths = extras
+          .map((u) => mediaUrlToPath(u))
+          .filter((p) => p && p !== src && fs.existsSync(p))
+          .slice(0, 3);
+        refs = { scene: src, extra: extraPaths };
+      } else if (mode === "chat" && engineId === "qwen-image-2.1-viggle" && !shot && !hasPresetBlocks) {
+        const plate = viggleBodyPlate(getCharacter(id)!);
+        if (!plate) throw new Error("Viggle needs a 3/4 body still. Headshot is not used.");
+        refs = { face: plate.path };
       } else if (mode === "chat") {
-        refs = locked.face ? locked : { face: src };
-        if (undressAsk) {
-          const bodyLock = locked.body && fs.existsSync(locked.body) ? locked.body : src;
-          refs = { face: bodyLock };
-        } else if (engineId !== "klein-qwen" && operatorSetsScene(fullPrompt) && refs.face) {
-          const crop = characterSlotFile(id, `face-crop-${editId.slice(0, 8)}`, "png");
-          const face = await cropIdentityFace(refs.face, crop);
-          refs = { face };
-        }
+        const qwen21 = engineId === "qwen-image-2.1" || engineId === "qwen-image-2.1-gguf";
+        const skipClothedBody = qwen21 && (undressAsk || bareChestAsk);
+        const shotPlate: Record<ShotPlate, "close" | "three_quarter" | "full"> = {
+          headshot: "close",
+          three_quarter: "three_quarter",
+          full: "full",
+        };
+        const framingSource = [String(body.presetPrompt || "").trim(), prepared.creative, ...Object.values(presetBlocks)]
+          .filter(Boolean)
+          .join("\n");
+        const legs = /\bknee[-\s]?shot\b|\bknee[-\s]?up\b|\bhead to the knees\b|\bdown to the knees\b/i.test(framingSource);
+        const framing = skipClothedBody
+          ? "close"
+          : shot
+            ? shotPlate[shot.plate]
+            : presetPlate
+              ? shotPlate[presetPlate]
+              : framingFromPrompt(framingSource);
+        const picked = characterGenerateRefs(getCharacter(id)!, framing, { legs });
+        const face = picked.face && fs.existsSync(picked.face) ? picked.face : src;
+        const bodyFile =
+          skipClothedBody
+            ? undefined
+            : picked.body && fs.existsSync(picked.body) && picked.body !== face
+              ? picked.body
+              : undefined;
+        refs = { face, body: bodyFile };
       } else {
         refs = { face: src, body: locked.body };
       }
       const { buffer } = await generateStill(fullPrompt, refs, engineId, {
         kind:
-          engineId === "klein-qwen" || mode === "face-swap"
+          isTryOnEngine(engineId) || mode === "product"
+            ? "on-model"
+            : mode === "face-swap"
             ? "faceswap"
-            : mode === "bg" || mode === "repair"
-              ? "bump"
-              : "restyle",
+            : mode === "scene" || mode === "retouch"
+              ? "scene"
+              : mode === "bg" || mode === "repair"
+                ? "bump"
+                : "restyle",
         width: canvas.width,
         height: canvas.height,
         aspect,
@@ -610,7 +909,28 @@ export async function runEdit(req: Request, id: string) {
         model: engineId,
         provider: job.provider,
         createdAt: job.createdAt,
+        shotId: shot?.id,
       });
+      if (mode === "chat") {
+        try {
+          const learnedBlocks = outside || loose ? presetBlocks : null;
+          const learnedPrompt = learnedBlocks
+            ? Object.entries(learnedBlocks)
+                .filter(([, text]) => String(text || "").trim())
+                .map(([id, text]) => `[${id}]\n${String(text).trim()}`)
+                .join("\n\n")
+            : [String(body.presetPrompt || "").trim(), prepared.creative].filter(Boolean).join("\n");
+          await learnLookFromGenerate({
+            id: editId,
+            prompt: learnedPrompt,
+            negative: compiled.negative,
+            preview: mediaUrl,
+            shot: Boolean(shot),
+          });
+        } catch {
+          /* overlay write is best-effort */
+        }
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       updateJob(job.id, { status: "failed", error: message });
@@ -643,7 +963,7 @@ export async function runVideoSet(_req: Request, id: string) {
           const { buffer } = await generateStill(
             prompt,
             characterStillRefs(getCharacter(id)!),
-            characterEditEngine(),
+            COMPLETE_SET_ENGINE,
             { kind: "restyle" },
           );
           fs.writeFileSync(destStill, buffer);

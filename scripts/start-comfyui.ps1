@@ -48,8 +48,14 @@ if ($Detach) {
     "cd /d `"$comfy`"",
     "`"$py`" $argv >> `"$log`" 2>&1"
   ) | Set-Content -Path $runner -Encoding ASCII
-  Start-Process -FilePath $runner -WorkingDirectory $comfy -WindowStyle Hidden
-  Write-Host "ComfyUI starting detached on :8188"
+  # WMI Create so the process is not a child of the Grok job object
+  # (Start-Process descendants die when the session wrapper hits max_runtime).
+  $created = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
+    CommandLine      = "cmd.exe /c `"$runner`""
+    CurrentDirectory = $comfy
+  }
+  if ($created.ReturnValue -ne 0) { throw "Win32_Process.Create failed: $($created.ReturnValue)" }
+  Write-Host "ComfyUI starting detached on :8188 (pid $($created.ProcessId))"
   Write-Host "Log: $log"
   exit 0
 }

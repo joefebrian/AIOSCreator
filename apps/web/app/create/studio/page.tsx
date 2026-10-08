@@ -12,10 +12,8 @@ export default function StudioPage() {
       .catch(() => setComfy("ComfyUI offline"));
   }, []);
   return (
-    <div className="relative">
-      <p className="pointer-events-none absolute right-4 top-3 z-10 text-[10px] tracking-wide text-white/40">
-        {comfy} · Product hub: on-model (character keroyok SKU) or faceless pack/hands. Prompt on the card; empty = auto.
-      </p>
+    <div className="relative h-full min-h-0">
+      <p className="pointer-events-none absolute bottom-2 right-4 z-10 text-[10px] tracking-wide text-white/30">{comfy}</p>
       <StudioCanvas />
     </div>
   );

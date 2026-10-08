@@ -151,7 +151,7 @@ export function StillCard({
           </button>
         ) : null}
         {exportUrl ? (
-          <a href={exportUrl} download className="block text-[11px] text-[#652DFF]">
+          <a href={exportUrl.includes("?") ? `${exportUrl}&download=1` : `${exportUrl}?download=1`} download className="block text-[11px] text-[#652DFF]">
             Download 2160×3840
           </a>
         ) : null}

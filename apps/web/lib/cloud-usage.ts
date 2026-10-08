@@ -209,6 +209,20 @@ export function buildUsageDashboard(days = 7) {
       spend: money(spendUsd),
       perOk: money(costPerOk),
     },
+    scriptUgc: (() => {
+      const rows = events.filter((e) => e.kind === "Script_UGC" || e.model === "Script_UGC");
+      const okRows = rows.filter((e) => e.ok);
+      const spend = okRows.reduce((s, e) => s + (e.estimatedUsd || 0), 0);
+      const tokens = okRows.reduce((s, e) => s + (e.tokens || 0), 0);
+      return {
+        label: "Script_UGC",
+        calls: rows.length,
+        ok: okRows.length,
+        fail: rows.length - okRows.length,
+        tokens,
+        spendUsd: Math.round(spend * 1_000_000) / 1_000_000,
+      };
+    })(),
     byModel: Object.entries(byModel)
       .map(([model, n]) => {
         const card = rateFor(model);

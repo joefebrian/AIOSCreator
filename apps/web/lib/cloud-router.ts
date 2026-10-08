@@ -1,6 +1,7 @@
 import {
   bumpAccountUsage,
   getApiAccount,
+  isWanDashscope,
   listUsableAccounts,
   markAccount,
   setAccountQuota,
@@ -31,7 +32,6 @@ const LIMITED_MS = 15 * 60 * 1000;
 
 function cometBase(modelId: string, raw: string, provider: ApiProviderId) {
   const base = raw.replace(/\/$/, "").replace(/\/v1$/, "");
-  if (provider === "hensun") return `${base}/v1`;
   if (modelId === "gpt-image-2" || modelId.startsWith("seedream-")) return `${base}/v1`;
   return base;
 }
@@ -41,9 +41,16 @@ export function listCloudCandidates(modelId: string): CloudCreds[] {
   for (const provider of routesFor(modelId)) {
     if (provider === "comfy") continue;
     if (!isWired(modelId, provider)) continue;
-    for (const acc of listUsableAccounts(provider)) {
+    let accs = listUsableAccounts(provider);
+    if (modelId === "grok-imagine-video" && provider === "xai") {
+      accs = [...accs].sort((a, b) => Number(/video/i.test(b.label)) - Number(/video/i.test(a.label)));
+    }
+    for (const acc of accs) {
+      if (modelId === "qwen-image-3.0" && provider === "dashscope" && isWanDashscope(acc)) continue;
       const base =
-        provider === "comet" || provider === "hensun"
+        modelId === "qwen-image-3.0" && provider === "dashscope"
+          ? "https://dashscope-intl.aliyuncs.com/api/v1"
+          : provider === "comet"
           ? cometBase(modelId, acc.baseURL, provider)
           : acc.baseURL.replace(/\/$/, "");
       out.push({
@@ -73,7 +80,9 @@ export function isCloudSafetyReject(message: string) {
 }
 
 export class CloudSafetyError extends Error {
-  constructor(message = "This cloud model blocks sexual content. Switch to a local model (Qwen Image Edit, FLUX Klein, or Z-Image).") {
+  constructor(
+    message = "This cloud model blocked the prompt (safety). For stills pick Grok Imagine or Qwen Image Edit. For video pick Grok Imagine Video, and drop words like nudity/undressing even in NEGATIVE.",
+  ) {
     super(message);
     this.name = "CloudSafetyError";
   }
@@ -114,9 +123,8 @@ export async function withCloudFailover<T>(
       return out;
     } catch (err) {
       last = err instanceof Error ? err : new Error(String(err));
-      if (isCloudSafetyReject(last.message) || last instanceof CloudSafetyError) {
-        throw new CloudSafetyError();
-      }
+      if (last instanceof CloudSafetyError) throw last;
+      if (isCloudSafetyReject(last.message)) throw new CloudSafetyError(last.message);
       const status = err instanceof CloudHttpError ? err.status : isAbort(err) ? 0 : -1;
       bumpAccountUsage(hit.accountId, false);
       logCloudUsage({

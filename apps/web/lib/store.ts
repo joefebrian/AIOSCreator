@@ -16,7 +16,7 @@ export type ModuleId =
 export type Job = {
   id: string;
   module: ModuleId;
-  kind: "script" | "image" | "motion" | "character" | "export" | "voice";
+  kind: "script" | "image" | "motion" | "character" | "export" | "voice" | "factory";
   input: string;
   status: JobStatus;
   error?: string;
@@ -30,6 +30,11 @@ export type Job = {
     scenes: string[];
     cta: string;
     platforms: string[];
+    format?: string;
+    hookVisual?: string;
+    firstFrame?: string;
+    beats?: { t: string; spoken: string; visual: string }[];
+    ctaVisual?: string;
   };
   model?: string;
   /** Billed pipe: comet | openai | byteplus | kling | wavespeed | comfy */
@@ -37,7 +42,27 @@ export type Job = {
   progress?: string;
   characterId?: string;
   productId?: string;
+  /** studio = AI Studio graph GEN. workspace = character tools. ugc-factory = Factory only. */
+  source?: "studio" | "workspace" | "ugc-factory" | "ugc-fashion" | "motion";
+  /** generated_video is a provider clip. listing_still is the catalog photo, not a generated shot. */
+  sourceKind?: "generated_video" | "generated_still" | "listing_still" | "uploaded";
+  nodeId?: string;
   upscaled?: boolean;
+  jev?: { inventedClaim?: number; speakPrice?: number; model?: string };
+  stillUrl?: string;
+  concepts?: {
+    title: string;
+    format?: string;
+    hook: string;
+    hookVisual?: string;
+    firstFrame?: string;
+    beats: { t: string; spoken: string; visual: string }[];
+    cta: string;
+    ctaVisual?: string;
+    voiceover: string;
+    scenes: string[];
+    platforms: string[];
+  }[];
   createdAt: string;
   updatedAt: string;
 };

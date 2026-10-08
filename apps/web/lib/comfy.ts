@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -58,11 +59,59 @@ const WIDTH = Number(process.env.COMFY_WIDTH || 768);
 const HEIGHT = Number(process.env.COMFY_HEIGHT || 1280);
 const STEPS = Number(process.env.COMFY_STEPS || 4);
 
+function comfyRootDir() {
+  return process.env.COMFYUI_ROOT || path.join(process.env.LOCALAPPDATA || "", "Programs", "ComfyUI");
+}
+
 function comfyInputDir() {
   return (
     process.env.COMFY_INPUT ||
-    path.join(process.env.LOCALAPPDATA || "", "Programs", "ComfyUI", "input")
+    path.join(comfyRootDir(), "input")
   );
+}
+
+function reactorInstalled() {
+  return fs.existsSync(path.join(comfyRootDir(), "custom_nodes", "comfyui-reactor-node", "nodes.py"));
+}
+
+function reactorRestoreName() {
+  const gfp = path.join(comfyRootDir(), "models", "facerestore_models", "GFPGANv1.4.pth");
+  return fs.existsSync(gfp) ? "GFPGANv1.4.pth" : "none";
+}
+
+function reactorSwapGraph(sceneName: string, faceName: string) {
+  return {
+    "1": {
+      class_type: "LoadImage",
+      inputs: { image: sceneName },
+    },
+    "2": {
+      class_type: "LoadImage",
+      inputs: { image: faceName },
+    },
+    "3": {
+      class_type: "ReActorFaceSwap",
+      inputs: {
+        enabled: true,
+        input_image: ["1", 0],
+        source_image: ["2", 0],
+        swap_model: "inswapper_128.onnx",
+        facedetection: "retinaface_resnet50",
+        face_restore_model: reactorRestoreName(),
+        face_restore_visibility: 0.7,
+        codeformer_weight: 0.5,
+        detect_gender_input: "no",
+        detect_gender_source: "no",
+        input_faces_index: "0",
+        source_faces_index: "0",
+        console_log_level: 1,
+      },
+    },
+    "4": {
+      class_type: "SaveImage",
+      inputs: { filename_prefix: "creatoros-reactor", images: ["3", 0] },
+    },
+  };
 }
 
 export type ComfyStatus = {
@@ -264,7 +313,8 @@ function kleinRefGraph(
 function stageInput(srcPath: string, prefix: string) {
   const dir = comfyInputDir();
   fs.mkdirSync(dir, { recursive: true });
-  const name = `${prefix}${path.extname(srcPath) || ".png"}`;
+  const ext = path.extname(srcPath) || ".png";
+  const name = `${prefix}-${randomBytes(4).toString("hex")}${ext}`;
   fs.copyFileSync(srcPath, path.join(dir, name));
   return name;
 }
@@ -350,15 +400,19 @@ async function queueAndWait(
   }
   const prompt_id = parsed.prompt_id;
   if (!prompt_id) throw new Error("ComfyUI did not return prompt_id");
-  const timeoutMs = opts?.timeoutMs ?? 300_000;
+  const timeoutMs = opts?.timeoutMs ?? 45 * 60 * 1000;
   const started = Date.now();
+  let misses = 0;
   while (Date.now() - started < timeoutMs) {
-    await new Promise((r) => setTimeout(r, 2000));
+    await new Promise((r) => setTimeout(r, 3000));
     let hist: Response;
     try {
-      hist = await fetch(`${COMFY}/history/${prompt_id}`, { cache: "no-store", signal: AbortSignal.timeout(8000) });
+      hist = await fetch(`${COMFY}/history/${prompt_id}`, { cache: "no-store", signal: AbortSignal.timeout(12_000) });
+      misses = 0;
     } catch (err) {
-      throw new Error(comfyDown(err));
+      misses += 1;
+      if (misses >= 8) throw new Error(comfyDown(err));
+      continue;
     }
     const data = (await hist.json()) as Record<string, HistoryEntry>;
     const entry = data[prompt_id];
@@ -372,19 +426,81 @@ async function queueAndWait(
     }
     const saved = pickSaved(entry, saveNode);
     if (saved) return fetchComfyFile(saved);
+    if (Date.now() - started > timeoutMs - 60_000 && (await comfyPromptQueued(prompt_id))) {
+      continue;
+    }
   }
-  throw new Error("ComfyUI timed out waiting for output");
+  const mins = Math.round((Date.now() - started) / 60_000);
+  throw new Error(`ComfyUI timed out after ${mins} min waiting for output. GPU may still be running — wait, then retry once.`);
+}
+
+const BIREFNET_FILE = "birefnet.safetensors";
+
+function birefnetFile() {
+  return path.join(process.env.LOCALAPPDATA || "", "Programs", "ComfyUI", "models", "background_removal", BIREFNET_FILE);
+}
+
+/** Local BiRefNet cutout. Foreground pixels stay; the background becomes PNG alpha. */
+export async function comfyCutout(srcPath: string) {
+  if (!fs.existsSync(srcPath)) throw new Error("product photo missing");
+  if (!fs.existsSync(birefnetFile())) {
+    throw new Error("BiRefNet weight is missing. The free background model is not installed.");
+  }
+  await comfyFreeVram();
+  const name = stageRef(srcPath, "creatoros-cutout");
+  return queueAndWait(
+    {
+      "1": { class_type: "LoadImage", inputs: { image: name } },
+      "2": { class_type: "LoadBackgroundRemovalModel", inputs: { bg_removal_name: BIREFNET_FILE } },
+      "3": { class_type: "RemoveBackground", inputs: { bg_removal_model: ["2", 0], image: ["1", 0] } },
+      "4": { class_type: "InvertMask", inputs: { mask: ["3", 0] } },
+      "5": { class_type: "JoinImageWithAlpha", inputs: { image: ["1", 0], alpha: ["4", 0] } },
+      "6": { class_type: "SaveImage", inputs: { filename_prefix: "creatoros-cutout", images: ["5", 0] } },
+    },
+    "6",
+    { timeoutMs: 10 * 60 * 1000 },
+  );
+}
+
+async function comfyPromptQueued(promptId: string) {
+  try {
+    const res = await fetch(`${COMFY}/queue`, { cache: "no-store", signal: AbortSignal.timeout(5000) });
+    if (!res.ok) return false;
+    const raw = await res.text();
+    return raw.includes(promptId);
+  } catch {
+    return false;
+  }
 }
 
 const Z_UNET = "z_image_turbo_int8_convrot.safetensors";
+const Z_FAMEGRID_LORA = "Famegrid_Z-Image_V1_Standard.safetensors";
+const Z_FAMEGRID_STRENGTH = 0.6;
+const Z_AOI_LORA = "aoinakamura_zimage_v1.safetensors";
+const Z_AOI_STRENGTH = 0.9;
 const Z_CLIP = process.env.COMFY_Z_CLIP || CLIP_STOCK;
 const Z_VAE = "ae.safetensors";
 const Z_W = Number(process.env.COMFY_Z_WIDTH || 768);
 const Z_H = Number(process.env.COMFY_Z_HEIGHT || 1280);
 const Z_STEPS = 8;
 
-function zImageLoaders() {
-  return {
+function zFamegridOn() {
+  return fs.existsSync(path.join(comfyLoraDir(), Z_FAMEGRID_LORA));
+}
+
+function zAoiOn(prompt?: string) {
+  return Boolean(prompt && /\baoinakamura\b/i.test(prompt) && fs.existsSync(path.join(comfyLoraDir(), Z_AOI_LORA)));
+}
+
+function zFamegridPrompt(prompt: string) {
+  if (!zFamegridOn()) return prompt;
+  const stripped = prompt.replace(/\bIGMODEL\b[,.]?\s*/gi, "").trim();
+  if (/\brlskn\b/i.test(stripped)) return stripped;
+  return `rlskn. ${stripped}`;
+}
+
+function zImageLoaders(prompt?: string) {
+  const loaders: Record<string, unknown> = {
     "1": {
       class_type: "UNETLoader",
       inputs: { unet_name: Z_UNET, weight_dtype: "default" },
@@ -398,14 +514,33 @@ function zImageLoaders() {
       inputs: { vae_name: Z_VAE },
     },
   };
+  const aoi = zAoiOn(prompt);
+  if (aoi) {
+    loaders["21"] = {
+      class_type: "LoraLoaderModelOnly",
+      inputs: { model: ["1", 0], lora_name: Z_AOI_LORA, strength_model: Z_AOI_STRENGTH },
+    };
+  } else if (zFamegridOn()) {
+    loaders["20"] = {
+      class_type: "LoraLoaderModelOnly",
+      inputs: { model: ["1", 0], lora_name: Z_FAMEGRID_LORA, strength_model: Z_FAMEGRID_STRENGTH },
+    };
+  }
+  return loaders;
+}
+
+function zImageModel(prompt?: string): [string, number] {
+  if (zAoiOn(prompt)) return ["21", 0];
+  return zFamegridOn() ? ["20", 0] : ["1", 0];
 }
 
 function zImageTxt2ImgGraph(prompt: string, seed: number, w = Z_W, h = Z_H) {
+  const text = zAoiOn(prompt) ? prompt : zFamegridPrompt(prompt);
   return {
-    ...zImageLoaders(),
+    ...zImageLoaders(prompt),
     "4": {
       class_type: "CLIPTextEncode",
-      inputs: { text: prompt, clip: ["2", 0] },
+      inputs: { text, clip: ["2", 0] },
     },
     "5": {
       class_type: "ConditioningZeroOut",
@@ -417,7 +552,7 @@ function zImageTxt2ImgGraph(prompt: string, seed: number, w = Z_W, h = Z_H) {
     },
     "7": {
       class_type: "ModelSamplingAuraFlow",
-      inputs: { model: ["1", 0], shift: 3 },
+      inputs: { model: zImageModel(prompt), shift: 3 },
     },
     "8": {
       class_type: "KSampler",
@@ -447,9 +582,9 @@ function zImageTxt2ImgGraph(prompt: string, seed: number, w = Z_W, h = Z_H) {
 
 /** Physique from the photo, new face — only when kind=transform. Keep-face uses the prompt as-is. */
 function zImageRefGraph(prompt: string, seed: number, refName: string, transform = false, w = Z_W, h = Z_H) {
-  const locked = transform ? `${TRANSFORM_LOCK_PREFIX}${prompt}` : prompt;
+  const locked = transform ? `${TRANSFORM_LOCK_PREFIX}${prompt}` : zAoiOn(prompt) ? prompt : zFamegridPrompt(prompt);
   return {
-    ...zImageLoaders(),
+    ...zImageLoaders(prompt),
     "4": {
       class_type: "LoadImage",
       inputs: { image: refName },
@@ -478,7 +613,7 @@ function zImageRefGraph(prompt: string, seed: number, refName: string, transform
     },
     "9": {
       class_type: "ModelSamplingAuraFlow",
-      inputs: { model: ["1", 0], shift: 3 },
+      inputs: { model: zImageModel(prompt), shift: 3 },
     },
     "10": {
       class_type: "KSampler",
@@ -555,6 +690,9 @@ const Q_UNET = "qwen_image_edit_2511_int8_convrot.safetensors";
 const Q_CLIP = "qwen_2.5_vl_7b_fp8_scaled.safetensors";
 const Q_VAE = "qwen_image_vae.safetensors";
 const Q_LORA = "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors";
+/** Anti-plastic pores. Stack after Lightning at 0.8 — owner rec 1–1.5 solo. */
+const Q_SKIN_LORA = "qwen-edit-skin_1.1_000002750.safetensors";
+const Q_SKIN_STRENGTH = 0.8;
 /** Face lock headshot. 512×640 was T0 emergency; 768×960 is the quality plate. */
 const Q_W = 768;
 const Q_H = 960;
@@ -620,17 +758,19 @@ function qwenEditGraph(
   opts?: GenerateStillOpts,
 ) {
   const kind = qwenKind(prompt, opts?.kind);
-  const restyle = kind === "restyle" || kind === "identity";
+  const sceneEdit = kind === "scene";
+  const onModel = kind === "on-model" || Boolean(refs.faceName && refs.bodyName && kind !== "faceswap" && kind !== "bump" && !sceneEdit);
+  const restyle = !onModel && !sceneEdit && (kind === "restyle" || kind === "identity");
   const faceswap = kind === "faceswap";
   const triple = Boolean(refs.faceName && refs.bodyName && refs.sceneName);
-  const size = qwenCanvasSize(prompt, kind, opts, triple, restyle);
-  const denoise = kind === "bump" ? 0.55 : 1;
-  const encodePixels = faceswap && refs.sceneName ? "19" : "5";
-  const faceW = triple ? 512 : Q_FACE_W;
-  const faceH = triple ? 640 : Q_FACE_H;
-  const bodyW = triple ? 512 : Q_BODY_W;
-  const bodyH = triple ? 768 : Q_BODY_H;
-  const useCanvas = restyle || triple || (faceswap && Boolean(opts?.width && opts?.height));
+  const size = qwenCanvasSize(prompt, onModel ? "identity" : kind, opts, triple, restyle || onModel);
+  const denoise = kind === "bump" ? 0.55 : kind === "faceswap" ? 0.75 : sceneEdit ? 0.7 : onModel ? 0.85 : 1;
+  const encodePixels = (faceswap || sceneEdit) && refs.sceneName ? "19" : "5";
+  const faceW = onModel ? size.w : triple ? 512 : Q_FACE_W;
+  const faceH = onModel ? size.h : triple ? 640 : Q_FACE_H;
+  const bodyW = onModel ? size.w : triple ? 512 : Q_BODY_W;
+  const bodyH = onModel ? size.h : triple ? 768 : Q_BODY_H;
+  const useCanvas = !onModel && !faceswap && !sceneEdit && (restyle || triple);
   const latent = useCanvas
     ? {
         class_type: "EmptyLatentImage",
@@ -643,10 +783,10 @@ function qwenEditGraph(
 
   const encodeInputs: Record<string, unknown> = {
     clip: ["2", 0],
-    image1: faceswap && refs.sceneName ? ["19", 0] : ["5", 0],
+    image1: (faceswap || sceneEdit) && refs.sceneName ? ["19", 0] : ["5", 0],
     prompt,
   };
-  if (faceswap && refs.sceneName) {
+  if ((faceswap || sceneEdit) && refs.sceneName) {
     if (refs.faceName) encodeInputs.image2 = ["5", 0];
     if (refs.bodyName) encodeInputs.image3 = ["21", 0];
   } else {
@@ -678,7 +818,7 @@ function qwenEditGraph(
         width: faceW,
         height: faceH,
         upscale_method: "lanczos",
-        crop: "center",
+        crop: onModel ? "disabled" : "center",
       },
     },
     "6": {
@@ -693,13 +833,20 @@ function qwenEditGraph(
       class_type: "LoraLoaderModelOnly",
       inputs: { model: ["7", 0], lora_name: Q_LORA, strength_model: 1 },
     },
+    "15": {
+      class_type: "LoraLoaderModelOnly",
+      inputs: { model: ["8", 0], lora_name: Q_SKIN_LORA, strength_model: Q_SKIN_STRENGTH },
+    },
     "9": {
       class_type: "TextEncodeQwenImageEditPlus",
       inputs: encodeInputs,
     },
     "10": {
       class_type: "TextEncodeQwenImageEditPlus",
-      inputs: { clip: ["2", 0], prompt: "" },
+      inputs: {
+        clip: ["2", 0],
+        prompt: "plastic skin, waxy, airbrushed, overly smooth porcelain, doll skin, cgi",
+      },
     },
     "11": latent,
     "12": {
@@ -711,7 +858,7 @@ function qwenEditGraph(
         sampler_name: "euler",
         scheduler: "simple",
         denoise,
-        model: ["8", 0],
+        model: ["15", 0],
         positive: ["9", 0],
         negative: ["10", 0],
         latent_image: ["11", 0],
@@ -738,7 +885,7 @@ function qwenEditGraph(
         width: bodyW,
         height: bodyH,
         upscale_method: "lanczos",
-        crop: "center",
+        crop: onModel ? "disabled" : "center",
       },
     };
   }
@@ -754,10 +901,176 @@ function qwenEditGraph(
         width: size.w,
         height: size.h,
         upscale_method: "lanczos",
-        crop: "center",
+        crop: faceswap || sceneEdit || onModel ? "disabled" : "center",
       },
     };
   }
+  return graph;
+}
+
+const Q21_UNET = "qwen_image_2.1_int8_convrot.safetensors";
+const Q21_GGUF = "qwen-image-2.1-Q5_K_M.gguf";
+const Q21_CLIP = "qwen3vl_8b_int8_convrot.safetensors";
+const Q21_VAE = "qwen_image_2.1_vae_bf16.safetensors";
+const Q21_STEPS = 25;
+const Q21_VIGGLE = "Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r128.safetensors";
+const Q21_SIGMAS = "1.0, 0.9375, 0.875, 0.75, 0.5, 0.25";
+
+function viggleLoraReady() {
+  return fs.existsSync(path.join(comfyLoraDir(), Q21_VIGGLE));
+}
+const Q21_NEG =
+  "plastic skin, waxy torso, airbrushed body, poreless, porcelain, wax figure, doll skin, cgi breasts, vinyl thighs, beauty filter, glass skin, Facetune, 3d render, Unreal Engine, oversmoothed";
+
+function qwen21Negative(prompt: string) {
+  const avoid = prompt.match(/(?:\nAvoid:|\nNegative prompt:)\s*([\s\S]*)$/i)?.[1]?.replace(/\s+/g, " ").trim() || "";
+  return [Q21_NEG, avoid].filter(Boolean).join(", ");
+}
+
+function qwen21UnetNode(gguf?: boolean) {
+  if (gguf) return { class_type: "UnetLoaderGGUF", inputs: { unet_name: Q21_GGUF } };
+  return { class_type: "UNETLoader", inputs: { unet_name: Q21_UNET, weight_dtype: "default" } };
+}
+
+function qwen21Size(opts?: GenerateStillOpts) {
+  let w = opts?.width || 768;
+  let h = opts?.height || 1024;
+  const cap = 1280;
+  if (w > cap || h > cap) {
+    const s = Math.min(cap / w, cap / h);
+    w *= s;
+    h *= s;
+  }
+  w = Math.max(32, Math.round(w / 32) * 32);
+  h = Math.max(32, Math.round(h / 32) * 32);
+  return { w, h };
+}
+
+function qwen21TaggedPrompt(prompt: string, slots: number) {
+  let p = prompt
+    .replace(/\bImage\s*1\b/gi, "<image1>")
+    .replace(/\bImage\s*2\b/gi, "<image2>")
+    .replace(/\bImage\s*3\b/gi, "<image3>")
+    .replace(/\bImage\s*4\b/gi, "<image4>");
+  if (slots >= 1 && !/<image1>/i.test(p)) {
+    p = `Keep identity from <image1>. ${p}`.trim();
+  }
+  return p;
+}
+
+function qwen21ModelNode(gguf?: boolean) {
+  if (!viggleLoraReady()) return qwen21UnetNode(gguf);
+  return {
+    class_type: "ViggleTurboLora",
+    inputs: { model: ["1", 0], lora_name: Q21_VIGGLE, strength: 1 },
+  };
+}
+
+function qwen21SampleNodes(
+  modelFrom: [string, number],
+  positiveFrom: [string, number],
+  negativeFrom: [string, number],
+  latentFrom: [string, number],
+  seed: number,
+  turbo = false,
+) {
+  if (!turbo) {
+    return {
+      "6": {
+        class_type: "KSampler",
+        inputs: {
+          seed,
+          steps: Q21_STEPS,
+          cfg: 1,
+          sampler_name: "euler",
+          scheduler: "simple",
+          denoise: 1,
+          model: modelFrom,
+          positive: positiveFrom,
+          negative: negativeFrom,
+          latent_image: latentFrom,
+        },
+      },
+    };
+  }
+  return {
+    "30": { class_type: "RandomNoise", inputs: { noise_seed: seed } },
+    "31": { class_type: "KSamplerSelect", inputs: { sampler_name: "euler" } },
+    "32": { class_type: "ViggleTurboSigmas", inputs: { latent: latentFrom, nodes: Q21_SIGMAS } },
+    "33": { class_type: "BasicGuider", inputs: { model: modelFrom, conditioning: positiveFrom } },
+    "6": {
+      class_type: "SamplerCustomAdvanced",
+      inputs: {
+        noise: ["30", 0],
+        guider: ["33", 0],
+        sampler: ["31", 0],
+        sigmas: ["32", 0],
+        latent_image: latentFrom,
+      },
+    },
+  };
+}
+
+function qwen21Txt2ImgGraph(prompt: string, seed: number, opts?: GenerateStillOpts, gguf?: boolean, turbo = false) {
+  const { w, h } = qwen21Size(opts);
+  const graph: Record<string, unknown> = {
+    "1": qwen21UnetNode(gguf),
+    "2": { class_type: "CLIPLoader", inputs: { clip_name: Q21_CLIP, type: "qwen_image", device: "cpu" } },
+    "3": { class_type: "VAELoader", inputs: { vae_name: Q21_VAE } },
+    "4": {
+      class_type: "TextEncodeQwenImage21",
+      inputs: { clip: ["2", 0], prompt, negative_prompt: turbo ? "" : qwen21Negative(prompt), resolution: 1024 },
+    },
+    "5": { class_type: "EmptyLatentImage", inputs: { width: w, height: h, batch_size: 1 } },
+  };
+  if (turbo) graph["1b"] = qwen21ModelNode(gguf);
+  return {
+    ...graph,
+    ...qwen21SampleNodes(turbo ? ["1b", 0] : ["1", 0], ["4", 0], ["4", 1], ["5", 0], seed, turbo),
+    "7": { class_type: "VAEDecode", inputs: { samples: ["6", 0], vae: ["3", 0] } },
+    "8": { class_type: "SaveImage", inputs: { filename_prefix: "creatoros-qwen21-t2i", images: ["7", 0] } },
+  };
+}
+
+function qwen21EditGraph(
+  prompt: string,
+  seed: number,
+  refs: { faceName?: string; bodyName?: string; sceneName?: string; extraNames?: string[] },
+  opts?: GenerateStillOpts,
+  gguf?: boolean,
+  turbo = false,
+) {
+  const swap = opts?.kind === "faceswap" || opts?.kind === "scene";
+  const extras = refs.extraNames || [];
+  const slots = (swap
+    ? [refs.sceneName, ...extras, refs.faceName, refs.bodyName]
+    : [refs.faceName, refs.bodyName, refs.sceneName, ...extras]
+  ).filter((n, i, a): n is string => Boolean(n) && a.indexOf(n) === i);
+  const tagged = qwen21TaggedPrompt(prompt, slots.length);
+  const encodeInputs: Record<string, unknown> = {
+    clip: ["2", 0],
+    vae: ["3", 0],
+    prompt: tagged,
+    negative_prompt: turbo ? "" : qwen21Negative(tagged),
+    resolution: 768,
+  };
+  const graph: Record<string, unknown> = {
+    "1": qwen21UnetNode(gguf),
+    "2": { class_type: "CLIPLoader", inputs: { clip_name: Q21_CLIP, type: "qwen_image", device: "cpu" } },
+    "3": { class_type: "VAELoader", inputs: { vae_name: Q21_VAE } },
+  };
+  if (turbo) graph["1b"] = qwen21ModelNode(gguf);
+  graph["4"] = { class_type: "QwenImage21Cache", inputs: { model: turbo ? ["1b", 0] : ["1", 0], device: "cpu", dtype: "int8" } };
+  slots.forEach((name, i) => {
+    const id = String(20 + i);
+    graph[id] = { class_type: "LoadImage", inputs: { image: name } };
+    encodeInputs[`images.image_${i + 1}`] = [id, 0];
+  });
+  graph["5"] = { class_type: "TextEncodeQwenImage21", inputs: encodeInputs };
+  Object.assign(graph, qwen21SampleNodes(["4", 0], ["5", 0], ["5", 1], ["5", 2], seed, turbo));
+  graph["7"] = { class_type: "VAEDecode", inputs: { samples: ["6", 0], vae: ["3", 0] } };
+  graph["8"] = { class_type: "SaveImage", inputs: { filename_prefix: "creatoros-qwen21-edit", images: ["7", 0] } };
+  void opts;
   return graph;
 }
 
@@ -838,6 +1151,19 @@ export async function comfyTxt2Img(
   const primary = refs.scene || refs.face || refs.body;
   const w = opts?.width;
   const h = opts?.height;
+  if (opts?.kind === "faceswap") {
+    const facePath = refs.face;
+    const scenePath = refs.scene;
+    if (!facePath || !fs.existsSync(facePath)) throw new Error("faceswap needs an identity plate");
+    if (!scenePath || !fs.existsSync(scenePath)) throw new Error("faceswap needs a target still");
+    if (!reactorInstalled()) {
+      throw new Error("ReActor is not in Comfy custom_nodes. Clone comfyui-reactor-node and restart Comfy.");
+    }
+    await comfyFreeVram();
+    const faceName = stageRef(facePath, "creatoros-face");
+    const sceneName = stageRef(scenePath, "creatoros-scene");
+    return queueAndWait(reactorSwapGraph(sceneName, faceName), "4", { timeoutMs: 15 * 60 * 1000 });
+  }
   if (engine === "sd15") {
     if (primary) {
       throw new Error("SD 1.5 has no character lock. Switch image engine to Klein or Z-Image Turbo.");
@@ -876,6 +1202,31 @@ export async function comfyTxt2Img(
       timeoutMs: 20 * 60 * 1000,
     });
   }
+  if (engine === "qwen-image-2.1" || engine === "qwen-image-2.1-gguf" || engine === "qwen-image-2.1-viggle") {
+    await comfyFreeVram();
+    const gguf = engine === "qwen-image-2.1-gguf";
+    const turbo = engine === "qwen-image-2.1-viggle";
+    if (turbo && !viggleLoraReady()) throw new Error("Viggle turbo LoRA is not in ComfyUI/models/loras");
+    const facePath = refs.face || primary;
+    if (!facePath) {
+      return queueAndWait(qwen21Txt2ImgGraph(prompt, seed, opts, gguf, turbo), "8", { timeoutMs: 45 * 60 * 1000 });
+    }
+    if (!fs.existsSync(facePath)) throw new Error("character lock file missing");
+    const faceName = stageRef(facePath, "creatoros-face");
+    const bodyName =
+      refs.body && refs.body !== facePath && fs.existsSync(refs.body)
+        ? stageRef(refs.body, "creatoros-body")
+        : undefined;
+    const sceneName =
+      refs.scene && fs.existsSync(refs.scene) ? stageRef(refs.scene, "creatoros-scene") : undefined;
+    const extraNames = (refs.extra || [])
+      .filter((p) => p && p !== facePath && p !== refs.scene && fs.existsSync(p))
+      .slice(0, 3)
+      .map((p, i) => stageRef(p, `creatoros-extra-${i}`));
+    return queueAndWait(qwen21EditGraph(prompt, seed, { faceName, bodyName, sceneName, extraNames }, opts, gguf, turbo), "8", {
+      timeoutMs: 45 * 60 * 1000,
+    });
+  }
   if (primary) {
     if (!fs.existsSync(primary)) throw new Error("character lock file missing");
     const refName = stageRef(primary);
@@ -894,7 +1245,7 @@ export async function comfyTxt2Img(
 const H3_FL2VA = "minimax_h3_fl2va_pruned_int8_convrot.safetensors";
 const H3_REF2VA = "minimax_h3_ref2va_pruned_int8_convrot.safetensors";
 const H3_CLIP = "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors";
-const H3_VVAE = "minimax_h3_video_vae_fp16.safetensors";
+const H3_VVAE = "minimax_h3_video_vae_int8_convrot.safetensors";
 const H3_AVAE = "minimax_h3_audio_vae_fp32.safetensors";
 /** LightX2V Ref2V distill. Full BF16 (~1.87GB) OOM'd 2s 448×800 on 3060 12GB. Rank-21 resize is the T0 file. */
 const H3_REF2V_TURBO_FULL = "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors";
@@ -912,6 +1263,8 @@ const H3_TURBO_STEPS = 4;
 /** larryvrh I2V/T2V turbo. 6 steps for small-motion UGC (v4 smear at 4-step heavy motion). */
 const H3_I2V_TURBO_STEPS = 6;
 const H3_I2V_TURBO_LORA = "minimax_h3_turbo_v4_step600_ema.safetensors";
+const H3_REALISM_LORA = "h3-realism-people-t2v-i2v-r2v.safetensors";
+const H3_REALISM_STRENGTH = 0.8;
 /** Community NSFW. I2V/T2V only — FL2VA trunk. Not R2V. Strength 0.5 on pruned INT8. */
 const H3_NUDE_I2V_LORA = "SexGod_NaughtyTimes_v3_rank64_unpruned.safetensors";
 /** Community NSFW copy. Ref2VA trunk only. Strength 1.0. Do not mix with NaughtyTimes. */
@@ -971,10 +1324,17 @@ function h3NudeR2vOn() {
   return fs.existsSync(path.join(comfyLoraDir(), H3_NUDE_R2V_LORA));
 }
 
+function h3RealismOn() {
+  return fs.existsSync(path.join(comfyLoraDir(), H3_REALISM_LORA));
+}
+
 function h3I2vGraph(prompt: string, seed: number, firstFrame: string, length = H3_LEN, nude = false) {
   const useNude = nude && h3NudeI2vOn();
   const useTurbo = !useNude && h3I2vTurboOn();
-  const model: [string, number] = useNude ? ["16", 0] : useTurbo ? ["16", 0] : ["1", 0];
+  const useRealism = !useNude && h3RealismOn();
+  const trunk: [string, number] = useNude || useTurbo ? ["16", 0] : ["1", 0];
+  const model: [string, number] = useRealism ? ["17", 0] : trunk;
+  if (useRealism && !/\br34l1sm\b/i.test(prompt)) prompt = `r34l1sm. ${prompt}`;
   const width = useTurbo ? H3_I2V_TURBO_W : H3_I2V_W;
   const height = useTurbo ? H3_I2V_TURBO_H : H3_I2V_H;
   const graph: Record<string, unknown> = {
@@ -1075,6 +1435,12 @@ function h3I2vGraph(prompt: string, seed: number, firstFrame: string, length = H
       },
     };
   }
+  if (useRealism) {
+    graph["17"] = {
+      class_type: "LoraLoaderModelOnly",
+      inputs: { model: trunk, lora_name: H3_REALISM_LORA, strength_model: H3_REALISM_STRENGTH },
+    };
+  }
   return graph;
 }
 
@@ -1082,7 +1448,10 @@ function h3R2vGraph(prompt: string, seed: number, picture: string, motionFile?: 
   const useNude = nude && h3NudeR2vOn();
   const turboLora = useNude ? null : h3Ref2vTurboName();
   const turbo = Boolean(turboLora);
-  const model: [string, number] = useNude || turbo ? ["17", 0] : ["1", 0];
+  const useRealism = !useNude && h3RealismOn();
+  const trunk: [string, number] = useNude || turbo ? ["17", 0] : ["1", 0];
+  const model: [string, number] = useRealism ? ["22", 0] : trunk;
+  if (useRealism && !/\br34l1sm\b/i.test(prompt)) prompt = `r34l1sm. ${prompt}`;
   const graph: Record<string, unknown> = {
     "1": {
       class_type: "UNETLoader",
@@ -1191,6 +1560,12 @@ function h3R2vGraph(prompt: string, seed: number, picture: string, motionFile?: 
     graph["17"] = {
       class_type: "MiniMaxH3SigmaShift",
       inputs: { model: ["16", 0], shift_video: 12, shift_audio: 3 },
+    };
+  }
+  if (useRealism) {
+    graph["22"] = {
+      class_type: "LoraLoaderModelOnly",
+      inputs: { model: trunk, lora_name: H3_REALISM_LORA, strength_model: H3_REALISM_STRENGTH },
     };
   }
   if (motionFile) {

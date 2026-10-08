@@ -14,6 +14,8 @@ export type CharacterEdit = {
   model?: string;
   provider?: string;
   createdAt?: string;
+  /** Generate Shot that produced this still. Older rows are matched from the prompt. */
+  shotId?: string;
 };
 
 export type CharacterSlot = {
@@ -62,6 +64,8 @@ export type Character = {
   edits?: CharacterEdit[];
   inspiration?: CharacterInspiration[];
   visibility?: "private" | "public";
+  /** Campaign countries this person can be assigned to. Empty until set on the character. */
+  markets?: ("ID" | "MY" | "SG" | "TH" | "JP" | "US")[];
   socialAccounts?: {
     platform: "tiktok" | "instagram" | "youtube" | "threads" | "x" | "pinterest";
     handle?: string;

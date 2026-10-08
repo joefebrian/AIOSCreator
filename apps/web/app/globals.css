@@ -19,6 +19,11 @@ body {
   color: var(--navy);
 }
 
+/* The Next dev badge uses a very high z-index and covers the drawer footer on a phone. */
+nextjs-portal {
+  z-index: 30 !important;
+}
+
 ::selection {
   background: color-mix(in srgb, var(--purple) 22%, white);
 }

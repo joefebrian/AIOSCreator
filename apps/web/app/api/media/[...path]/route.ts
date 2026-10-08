@@ -4,6 +4,7 @@ import { Readable } from "node:stream";
 import { NextResponse } from "next/server";
 import { ensureImageThumb, isThumbable } from "@/lib/media-thumb";
 import { dataRoot } from "@/lib/paths";
+import { canStripAiMarks, stripAiMarksForDownload } from "@/lib/strip-ai-marks";
 
 export const runtime = "nodejs";
 
@@ -91,25 +92,44 @@ export async function GET(req: Request, { params }: { params: Promise<{ path: st
         "Content-Length": String(tstat.size),
         ETag: etag,
         "Last-Modified": tstat.mtime.toUTCString(),
+        "Cache-Control": "public, max-age=86400",
       }),
     });
   }
   const name = path.basename(found.abs);
-  const range = parseRange(req.headers.get("range"), found.stat.size);
-  if (range) {
+  let abs = found.abs;
+  let sendType = type;
+  let sendName = name;
+  let stat = found.stat;
+  if (download && canStripAiMarks(found.ext)) {
+    try {
+      abs = await stripAiMarksForDownload(found.abs);
+      const ext = path.extname(abs).toLowerCase();
+      sendType = TYPES[ext] || type;
+      sendName = name.replace(/\.[^.]+$/, ext);
+      stat = fs.statSync(abs);
+    } catch {
+      abs = found.abs;
+      sendType = type;
+      sendName = name;
+      stat = found.stat;
+    }
+  }
+  const range = parseRange(req.headers.get("range"), stat.size);
+  if (range && abs === found.abs) {
     const len = range.end - range.start + 1;
-    return new NextResponse(fileStream(found.abs, range.start, range.end), {
+    return new NextResponse(fileStream(abs, range.start, range.end), {
       status: 206,
-      headers: commonHeaders(type, name, download, {
+      headers: commonHeaders(sendType, sendName, download, {
         "Content-Length": String(len),
-        "Content-Range": `bytes ${range.start}-${range.end}/${found.stat.size}`,
+        "Content-Range": `bytes ${range.start}-${range.end}/${stat.size}`,
       }),
     });
   }
-  return new NextResponse(fileStream(found.abs), {
+  return new NextResponse(fileStream(abs), {
     status: 200,
-    headers: commonHeaders(type, name, download, {
-      "Content-Length": String(found.stat.size),
+    headers: commonHeaders(sendType, sendName, download, {
+      "Content-Length": String(stat.size),
     }),
   });
 }

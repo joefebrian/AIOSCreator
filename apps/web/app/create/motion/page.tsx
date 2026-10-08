@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { BindFaceButton, BindFacePanel } from "@/components/create/BindFacePanel";
 import { CharacterPicker } from "@/components/create/CharacterPicker";
+import { DriveLibrary } from "@/components/create/DriveLibrary";
 import { DropSlot } from "@/components/create/DropSlot";
 import { EnginePicker } from "@/components/create/EnginePicker";
 import { useGpu } from "@/components/GpuStatus";
-import { Btn, Page, Surface } from "@/components/ui";
+import { Btn } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { formatElapsed, pollJob } from "@/lib/http";
 import { isProductMediaUrl } from "@/lib/media-kind";
@@ -22,6 +24,7 @@ type Job = {
   createdAt: string;
   upscaled?: boolean;
   characterId?: string;
+  source?: string;
 };
 
 function motionEngineLabel(id?: string) {
@@ -75,7 +78,11 @@ export default function MotionControlPage() {
   const [elapsed, setElapsed] = useState("");
   const [progress, setProgress] = useState("");
   const [cameras, setCameras] = useState<string[]>([]);
-  const [orientation, setOrientation] = useState<"image" | "video">("image");
+  const [orientation, setOrientation] = useState<"image" | "video">("video");
+  const [quality, setQuality] = useState<"720p" | "1080p">("1080p");
+  const [bindFace, setBindFace] = useState(false);
+  const [bindOpen, setBindOpen] = useState(false);
+  const [faceRefs, setFaceRefs] = useState<string[]>([]);
   const [keepAudio, setKeepAudio] = useState(true);
   const [engineId, setEngineId] = useState("kling-3-0");
   const submitLock = useRef(false);
@@ -92,13 +99,26 @@ export default function MotionControlPage() {
           if (x.model === "upload" && !x.characterId) return /\/characters\//.test(x.mediaUrl);
           return Boolean(x.characterId) || /\/characters\//.test(x.mediaUrl);
         });
-        const motionClips = all.filter((x) => x.status === "completed" && x.mediaUrl && x.kind === "motion");
+        const motionClips = all.filter((x) => {
+          if (x.status !== "completed" || !x.mediaUrl || x.kind !== "motion") return false;
+          if (x.source === "studio" || x.source === "ugc-factory" || x.source === "ugc-fashion") return false;
+          if (/\/UGC_Factory\//i.test(x.mediaUrl) || /\/UGC_Fashion\//i.test(x.mediaUrl)) return false;
+          if (x.model === "upload" || /\/uploads\//.test(x.mediaUrl)) return true;
+          return x.model === "kling-2-6" || x.model === "kling-3-0" || x.model === "dreamactor-v2";
+        });
         setJobs(stills);
         setClips(motionClips);
-        setClip((cur) => cur || motionClips[0]?.mediaUrl || "");
+        const preview = motionClips.find(
+          (x) => x.model === "kling-2-6" || x.model === "kling-3-0" || x.model === "dreamactor-v2",
+        );
+        setClip((cur) => cur || preview?.mediaUrl || "");
       })
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    setFaceRefs((cur) => cur.filter((url) => url && url !== character));
+  }, [character]);
 
   useEffect(() => {
     if (!busy) {
@@ -116,6 +136,11 @@ export default function MotionControlPage() {
     await generateWith(character, motion, prompt, engineId);
   }
 
+  const pageClips = clips.filter(
+    (c) => c.model === "kling-2-6" || c.model === "kling-3-0" || c.model === "dreamactor-v2",
+  );
+  const faceCount = faceRefs.filter((url) => url && url !== character).length;
+  const faceNeeded = engineId === "kling-3-0" && bindFace && faceCount < 1;
   const gpuBusy = busy || gpu.busy;
   const active = clips.find((c) => c.mediaUrl === clip);
 
@@ -172,9 +197,13 @@ export default function MotionControlPage() {
     setProgress("Starting…");
     setError("");
     try {
-      const extras = [cameras.map((id) => CAMERAS.find((x) => x.id === id)?.prompt).filter(Boolean).join(", "), notes]
-        .filter(Boolean)
-        .join(". ");
+      const chosen = model || engineId;
+      const kling = chosen === "kling-2-6" || chosen === "kling-3-0";
+      const faces = chosen === "kling-3-0" && bindFace ? faceRefs.filter((url) => url && url !== imageUrl) : [];
+      const cameraLine = orientation === "image"
+        ? cameras.map((id) => CAMERAS.find((x) => x.id === id)?.prompt).filter(Boolean).join(", ")
+        : "";
+      const extras = [cameraLine, notes].filter(Boolean).join(". ");
       const res = await fetch("/api/jobs/motion", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -184,7 +213,9 @@ export default function MotionControlPage() {
           prompt: extras || undefined,
           orientation,
           sound: keepAudio,
-          engineId: model || engineId,
+          engineId: chosen,
+          ...(kling ? { resolution: quality } : {}),
+          ...(faces.length ? { faceUrls: faces } : {}),
         }),
       });
       const json = await res.json();
@@ -230,101 +261,136 @@ export default function MotionControlPage() {
   }
 
   return (
-    <Page
-      kicker="CREATE · MOTIONCONTROL"
-      title="MotionControl"
-      description={
-        <>
-          Lock the person from the <strong>still</strong>. The <strong>drive clip</strong> is motion only — Kling
-          copies body movement, not the face in the video. Still → video (Wan 3.0) lives in{" "}
-          <Link href="/create/studio" className="font-semibold text-[#652DFF]">
-            AI Studio
-          </Link>
-          . Lock identity in{" "}
-          <Link href="/create/characters" className="font-semibold text-[#652DFF]">
-            Characters
-          </Link>{" "}
-          first.
-        </>
-      }
-    >
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
-        <Surface className="xl:sticky xl:top-16">
-          <EnginePicker kind="motion" onChange={setEngineId} />
-          {engineId === "dreamactor-v2" ? (
-            <p className="mt-2 text-[12px] leading-snug text-[#B45309]">
-              DreamActor is weaker on photoreal faces. For this catalog-model look, pick <strong>Kling 3.0</strong>.
-            </p>
-          ) : null}
-          <div className="mt-5">
-            <p className="text-[11px] font-semibold tracking-[0.16em] text-[#9CA3AF]">1 · IDENTITY LOCK</p>
-            <p className="mt-1 text-[12px] text-[#6B7280]">
-              Who appears. Face + body + wardrobe from this still. Not the person in the drive clip.
-            </p>
-            <div className="mt-2">
-              <DropSlot
-                kind="image"
-                label="Drop the locked still"
-                hint="Front or 3/4, face + body visible"
-                value={character}
-                onChange={setCharacter}
-              />
-            </div>
-            <CharacterPicker value={character} onChange={setCharacter} />
-          </div>
+    <div className="flex flex-col xl:h-[calc(100vh-4rem)] xl:overflow-hidden">
+      <div className="shrink-0 border-b border-[#E6E8EE] bg-white px-4 py-3 md:px-6">
+        <p className="text-[10px] font-semibold tracking-[0.16em] text-[#652DFF]">CREATE · MOTIONCONTROL</p>
+        <div className="mt-1 flex flex-wrap items-end justify-between gap-x-6 gap-y-1">
+          <h1 className="text-xl font-black tracking-tight">MotionControl</h1>
+          <p className="max-w-xl text-[12px] leading-snug text-[#6B7280]">
+            Lock the person from the <strong className="font-semibold text-[#374151]">still</strong>. The drive clip is
+            motion only. Still → video lives in{" "}
+            <Link href="/create/studio" className="font-semibold text-[#652DFF]">
+              AI Studio
+            </Link>
+            . Lock identity in{" "}
+            <Link href="/create/characters" className="font-semibold text-[#652DFF]">
+              Characters
+            </Link>{" "}
+            first.
+          </p>
+        </div>
+      </div>
 
-          <div className="mt-6">
-            <p className="text-[11px] font-semibold tracking-[0.16em] text-[#9CA3AF]">2 · MOTION REFERENCE</p>
-            <p className="mt-1 text-[12px] text-[#6B7280]">
-              Body movement only. Face in this clip is ignored. 3–30s mp4/mov, one person, one take.
-            </p>
-            <div className="mt-2">
-              <DropSlot
-                kind="video"
-                frame="wide"
-                label="Drop the drive clip"
-                hint="mp4 / mov · 3–30s · limbs + head visible"
-                value={motion}
-                onChange={setMotion}
-              />
-            </div>
-            {clips.length ? (
+      <div className="grid min-h-0 min-w-0 flex-1 xl:grid-cols-[minmax(22rem,26rem)_minmax(0,1fr)] xl:grid-rows-[minmax(0,1fr)]">
+        <div className="flex min-h-0 min-w-0 flex-col border-[#E6E8EE] bg-white xl:h-full xl:border-r">
+          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 py-4 md:px-5">
+            <EnginePicker kind="motion" onChange={setEngineId} />
+            {engineId === "dreamactor-v2" ? (
+              <p className="mt-2 text-[12px] leading-snug text-[#B45309]">
+                DreamActor is weaker on photoreal faces. For this catalog-model look, pick <strong>Kling 3.0</strong>.
+              </p>
+            ) : null}
+            {engineId === "kling-2-6" || engineId === "kling-3-0" ? (
               <div className="mt-3">
-                <p className="text-[11px] font-semibold tracking-[0.16em] text-[#9CA3AF]">LIBRARY</p>
-                <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
-                  {clips.slice(0, 12).map((c) => (
-                    <button
-                      key={`drive-${c.id}`}
-                      type="button"
-                      onClick={() => useAsDrive(c.mediaUrl)}
-                      title="Use as motion reference"
-                      className={cn(
-                        "h-16 w-12 shrink-0 overflow-hidden rounded-lg border",
-                        motion === c.mediaUrl ? "border-[#652DFF]" : "border-[#E6E8EE]",
-                      )}
-                    >
-                      <video src={c.mediaUrl} muted playsInline preload="metadata" className="h-full w-full object-cover" />
-                    </button>
-                  ))}
+                <p className="text-[12px] font-semibold text-[#6B7280]">Quality</p>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setQuality("720p")}
+                    className={cn(
+                      "rounded-xl border px-3 py-2 text-left",
+                      quality === "720p" ? "border-[#652DFF] bg-[#652DFF]/5" : "border-[#E6E8EE] bg-white",
+                    )}
+                  >
+                    <span className="block text-[12px] font-semibold text-[#111827]">Standard</span>
+                    <span className="mt-0.5 block text-[11px] text-[#6B7280]">720p</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setQuality("1080p")}
+                    className={cn(
+                      "rounded-xl border px-3 py-2 text-left",
+                      quality === "1080p" ? "border-[#652DFF] bg-[#652DFF]/5" : "border-[#E6E8EE] bg-white",
+                    )}
+                  >
+                    <span className="block text-[12px] font-semibold text-[#111827]">Professional</span>
+                    <span className="mt-0.5 block text-[11px] text-[#6B7280]">1080p</span>
+                  </button>
                 </div>
               </div>
             ) : null}
-          </div>
 
-          <div className="mt-5">
-            <p className="text-[12px] font-semibold text-[#6B7280]">Lock mode</p>
-              <div className="mt-2 grid gap-2">
+            <div className="mt-4">
+              <p className="text-[11px] font-semibold tracking-[0.16em] text-[#9CA3AF]">1 · CHARACTER LOCK</p>
+              <p className="mt-1 text-[12px] text-[#6B7280]">
+                Who appears. Face, body, and wardrobe come from this still.
+              </p>
+              <div className="mt-2">
+                <DropSlot
+                  kind="image"
+                  frame="band"
+                  label="Drop the locked still"
+                  hint="Front or 3/4, face + body visible"
+                  value={character}
+                  onChange={setCharacter}
+                />
+              </div>
+              {engineId === "kling-3-0" ? (
+                <BindFaceButton
+                  bound={bindFace && faceCount > 0}
+                  count={faceCount}
+                  onOpen={() => setBindOpen(true)}
+                  onClear={() => {
+                    setBindFace(false);
+                    setFaceRefs([]);
+                  }}
+                />
+              ) : null}
+              <CharacterPicker value={character} onChange={setCharacter} imageJobs={jobs} />
+            </div>
+
+            <div className="mt-4">
+              <p className="text-[11px] font-semibold tracking-[0.16em] text-[#9CA3AF]">2 · MOTION REFERENCE</p>
+              <p className="mt-1 text-[12px] text-[#6B7280]">
+                Body movement only. The face in this clip is ignored. 3–30s, one person, one take.
+              </p>
+              <div className="mt-2">
+                <DropSlot
+                  kind="video"
+                  frame="band"
+                  label="Drop the drive clip"
+                  hint="mp4 / mov · limbs + head visible"
+                  value={motion}
+                  onChange={setMotion}
+                />
+              </div>
+              <DriveLibrary
+                clips={clips}
+                value={motion}
+                onPick={useAsDrive}
+                onRemoved={(url) => {
+                  if (motion === url) setMotion("");
+                }}
+              />
+            </div>
+
+            <div className="mt-4">
+              <p className="text-[12px] font-semibold text-[#6B7280]">Lock mode</p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
                 <button
                   type="button"
-                  onClick={() => setOrientation("image")}
+                  onClick={() => {
+                    setOrientation("image");
+                    setBindFace(false);
+                  }}
                   className={cn(
                     "rounded-xl border px-3 py-2 text-left",
                     orientation === "image" ? "border-[#652DFF] bg-[#652DFF]/5" : "border-[#E6E8EE] bg-white",
                   )}
                 >
                   <span className="block text-[12px] font-semibold text-[#111827]">Still orientation</span>
-                  <span className="mt-0.5 block text-[11px] text-[#6B7280]">
-                    Keep facing/framing from the photo. Stronger identity lock. Drive clip max 10s.
+                  <span className="mt-0.5 block text-[11px] leading-snug text-[#6B7280]">
+                    Keep the photo’s facing. Camera moves are allowed. Drive clip max 10s.
                   </span>
                 </button>
                 <button
@@ -336,8 +402,8 @@ export default function MotionControlPage() {
                   )}
                 >
                   <span className="block text-[12px] font-semibold text-[#111827]">Drive orientation</span>
-                  <span className="mt-0.5 block text-[11px] text-[#6B7280]">
-                    Follow the clip’s body facing. Better motion copy. Drive clip max 30s.
+                  <span className="mt-0.5 block text-[11px] leading-snug text-[#6B7280]">
+                    Facing, motion, and camera follow the clip. Drive clip max 30s.
                   </span>
                 </button>
               </div>
@@ -345,92 +411,120 @@ export default function MotionControlPage() {
                 <input type="checkbox" checked={keepAudio} onChange={(e) => setKeepAudio(e.target.checked)} />
                 Keep audio from the drive clip
               </label>
-              <p className="mt-2 text-[11px] text-[#9CA3AF]">Output length follows the drive clip. 1080p.</p>
+              <p className="mt-2 text-[11px] text-[#9CA3AF]">
+                Output length follows the drive clip.
+                {engineId === "kling-2-6" || engineId === "kling-3-0"
+                  ? quality === "720p"
+                    ? " Standard 720p."
+                    : " Professional 1080p."
+                  : null}
+              </p>
             </div>
 
-          <div className="mt-4">
-            <p className="text-[12px] font-semibold text-[#6B7280]">Camera extras</p>
-            <p className="mt-0.5 text-[11px] text-[#9CA3AF]">Skip unless you want extra camera on top of the clip. Can fight the lock.</p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {CAMERAS.map((c) => {
-                const on = cameras.includes(c.id);
-                return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() =>
-                      setCameras((cur) => (cur.includes(c.id) ? cur.filter((x) => x !== c.id) : [...cur, c.id]))
-                    }
-                    className={cn(
-                      "rounded-full border px-2.5 py-1 text-[11px] font-semibold",
-                      on ? "border-[#652DFF] bg-[#652DFF] text-white" : "border-[#E6E8EE] bg-white text-[#4B5563]",
-                    )}
-                  >
-                    {c.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <label className="mt-4 block text-[12px] font-semibold text-[#6B7280]">
-            Notes
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              rows={2}
-              placeholder="Optional. Don’t describe a new person — identity is locked from the still."
-              className="mt-1 w-full resize-none rounded-xl border border-[#E6E8EE] bg-white p-2 text-sm font-normal outline-none focus:border-[#652DFF]"
-            />
-          </label>
-
-          <Btn
-            type="button"
-            disabled={busy || !character || !motion}
-            aria-busy={busy}
-            onClick={() => void generate()}
-            className={cn("mt-4 w-full", busy && "pointer-events-none")}
-          >
-            {busy
-              ? `Working${elapsed ? ` · ${elapsed}` : ""}${progress ? ` · ${progress}` : ""}`
-              : !character
-                ? "Lock a still first"
-                : !motion
-                  ? "Drop a drive clip"
-                  : "Generate"}
-          </Btn>
-          {busy ? (
-            <p className="mt-2 text-[12px] text-[#6B7280]">Job started. Don’t click again — wait for the clip.</p>
-          ) : null}
-          {error ? <p className="mt-2 text-[12px] text-red-600">{error}</p> : null}
-        </Surface>
-
-        <div>
-          <p className="text-[11px] font-semibold tracking-[0.16em] text-[#9CA3AF]">PREVIEW</p>
-          <div className="mt-2 overflow-hidden rounded-2xl border border-[#E6E8EE] bg-[#0e1014]">
-            <div className="relative aspect-[3/4] max-h-[70vh]">
-              {clip ? (
-                <video
-                  key={`${clip}-${bust}`}
-                  src={bust ? `${clip.split("?")[0]}?t=${bust}` : clip}
-                  className="h-full w-full bg-black object-contain"
-                  controls
-                  muted
-                  loop
-                  autoPlay
-                  playsInline
-                  preload="metadata"
-                />
+            <div className="mt-4">
+              <p className="text-[12px] font-semibold text-[#6B7280]">Camera extras</p>
+              {orientation === "video" ? (
+                <p className="mt-0.5 text-[11px] text-[#9CA3AF]">Camera follows the drive clip.</p>
               ) : (
-                <div className="flex h-full flex-col items-center justify-center gap-1 px-6 text-center">
-                  <p className="text-[12px] font-semibold tracking-[0.16em] text-white/40">NO CLIP YET</p>
-                  <p className="text-[12px] text-white/30">Lock a still, drop a drive clip, then Generate.</p>
-                </div>
+                <>
+                  <p className="mt-0.5 text-[11px] text-[#9CA3AF]">Added on top of the clip. Still orientation only.</p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {CAMERAS.map((c) => {
+                      const on = cameras.includes(c.id);
+                      return (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() =>
+                            setCameras((cur) => (cur.includes(c.id) ? cur.filter((x) => x !== c.id) : [...cur, c.id]))
+                          }
+                          className={cn(
+                            "rounded-full border px-2.5 py-1 text-[11px] font-semibold",
+                            on ? "border-[#652DFF] bg-[#652DFF] text-white" : "border-[#E6E8EE] bg-white text-[#4B5563]",
+                          )}
+                        >
+                          {c.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
               )}
             </div>
+
+            <label className="mt-4 block text-[12px] font-semibold text-[#6B7280]">
+              Notes
+              <textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                rows={2}
+                placeholder="Background and scene details. Do not describe a new person."
+                className="mt-1 w-full resize-none rounded-xl border border-[#E6E8EE] bg-white p-2 text-sm font-normal outline-none focus:border-[#652DFF]"
+              />
+            </label>
           </div>
+
+          <div className="shrink-0 border-t border-[#E6E8EE] bg-white px-4 py-3 md:px-5">
+            <Btn
+              type="button"
+              disabled={busy || !character || !motion || faceNeeded}
+              aria-busy={busy}
+              onClick={() => void generate()}
+              className={cn("w-full", busy && "pointer-events-none")}
+            >
+              {busy
+                ? `Working${elapsed ? ` · ${elapsed}` : ""}${progress ? ` · ${progress}` : ""}`
+                : !character
+                  ? "Lock a character first"
+                  : faceNeeded
+                    ? "Add 1 face photo"
+                    : !motion
+                      ? "Drop a drive clip"
+                      : "Generate"}
+            </Btn>
+            {busy ? (
+              <p className="mt-2 text-[12px] text-[#6B7280]">Job started. Don’t click again — wait for the clip.</p>
+            ) : null}
+            {error ? <p className="mt-2 text-[12px] text-red-600">{error}</p> : null}
+            <BindFacePanel
+              open={bindOpen && engineId === "kling-3-0"}
+              locked={character}
+              selected={faceRefs}
+              onClose={() => setBindOpen(false)}
+              onBind={(urls) => {
+                setFaceRefs(urls);
+                setBindFace(urls.length > 0);
+                if (urls.length > 0) setOrientation("video");
+                setBindOpen(false);
+              }}
+            />
+          </div>
+        </div>
+
+        <div className="flex min-h-0 min-w-0 flex-col gap-3 overflow-y-auto p-4 md:p-5">
+          <div className="relative min-h-[280px] flex-1 overflow-hidden rounded-2xl border border-[#E6E8EE] bg-[#0e1014]">
+            {clip ? (
+              <video
+                key={`${clip}-${bust}`}
+                src={bust ? `${clip.split("?")[0]}?t=${bust}` : clip}
+                className="absolute inset-0 h-full w-full bg-black object-contain"
+                controls
+                muted
+                loop
+                autoPlay
+                playsInline
+                preload="metadata"
+              />
+            ) : (
+              <div className="flex h-full min-h-[280px] flex-col items-center justify-center gap-1 px-6 text-center">
+                <p className="text-[12px] font-semibold tracking-[0.16em] text-white/40">NO CLIP YET</p>
+                <p className="text-[12px] text-white/30">Lock a still, drop a drive clip, then Generate.</p>
+              </div>
+            )}
+          </div>
+
           {clip && active ? (
-            <div className="mt-3 rounded-xl border border-[#E6E8EE] bg-white px-3 py-2 text-[12px] text-[#4B5563]">
+            <div className="rounded-xl border border-[#E6E8EE] bg-white px-3 py-2 text-[12px] text-[#4B5563]">
               <p className="font-semibold text-[#111827]">{motionEngineLabel(active.model)}</p>
               <p className="mt-0.5">
                 {providerLabel(active.provider)} · {active.model}
@@ -443,8 +537,9 @@ export default function MotionControlPage() {
               ) : null}
             </div>
           ) : null}
+
           {clip ? (
-            <div className="mt-3 flex flex-row-reverse justify-end gap-1">
+            <div className="flex flex-row-reverse justify-end gap-1">
               {active ? (
                 <IconBtn title="Delete" onClick={() => void deleteClip(active)}>
                   <TrashGlyph />
@@ -465,55 +560,43 @@ export default function MotionControlPage() {
               ) : (
                 <span className="flex h-7 items-center rounded-md bg-black px-1.5 text-[10px] font-bold text-white">4K</span>
               )}
-              <a href={`${clip}?download=1`} download title="Save" className={iconClass()}>
+              <a href={`${clip}?download=1`} download title="Save" className="flex h-7 w-7 items-center justify-center rounded-md bg-white text-[#111827] ring-1 ring-[#E6E8EE] hover:bg-[#F3F4F8]">
                 <DownloadGlyph />
               </a>
             </div>
           ) : null}
 
-          {clips.length ? (
-            <div className="mt-6">
-              <p className="text-[11px] font-semibold tracking-[0.16em] text-[#9CA3AF]">LIBRARY</p>
-              <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
-                {clips.slice(0, 24).map((c) => (
+          {pageClips.length ? (
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold tracking-[0.16em] text-[#9CA3AF]">CLIPS</p>
+              <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+                {pageClips.slice(0, 24).map((c) => (
                   <div
                     key={c.id}
                     className={cn(
-                      "group relative overflow-hidden rounded-xl border",
+                      "group relative h-28 w-20 shrink-0 overflow-hidden rounded-xl border",
                       clip === c.mediaUrl ? "border-[#652DFF] ring-1 ring-[#652DFF]/30" : "border-[#E6E8EE]",
                     )}
                   >
-                    <button type="button" onClick={() => setClip(c.mediaUrl || "")} className="relative block w-full">
+                    <button type="button" onClick={() => setClip(c.mediaUrl || "")} className="relative block h-full w-full">
                       <video
                         src={c.mediaUrl}
                         muted
                         playsInline
                         preload="metadata"
-                        className="aspect-[3/4] w-full object-cover"
+                        className="h-full w-full object-cover"
                       />
                     </button>
-                    <div className="absolute right-1.5 top-1.5 z-10 flex flex-row-reverse gap-1">
-                      <IconBtn title="Delete" onClick={() => void deleteClip(c)}>
-                        <TrashGlyph />
-                      </IconBtn>
-                      <IconBtn title="Regenerate" disabled={gpuBusy} onClick={() => void regenerate(c)}>
-                        <RegenGlyph />
-                      </IconBtn>
+                    <div className="absolute inset-x-1 bottom-1 z-10 hidden justify-end gap-1 group-hover:flex">
                       <IconBtn title="Use as motion reference" onClick={() => useAsDrive(c.mediaUrl)}>
                         <DriveGlyph />
                       </IconBtn>
-                      <a
-                        href={`${c.mediaUrl}?download=1`}
-                        download
-                        title="Save"
-                        onClick={(e) => e.stopPropagation()}
-                        className={iconClass()}
-                      >
-                        <DownloadGlyph />
-                      </a>
+                      <IconBtn title="Delete" onClick={() => void deleteClip(c)}>
+                        <TrashGlyph />
+                      </IconBtn>
                     </div>
                     {c.upscaled ? (
-                      <span className="absolute left-1.5 top-1.5 rounded bg-black/75 px-1 py-0.5 text-[9px] font-bold text-white">
+                      <span className="absolute left-1 top-1 z-10 rounded bg-black/75 px-1 py-0.5 text-[9px] font-bold text-white">
                         4K
                       </span>
                     ) : null}
@@ -524,7 +607,7 @@ export default function MotionControlPage() {
           ) : null}
         </div>
       </div>
-    </Page>
+    </div>
   );
 }
 

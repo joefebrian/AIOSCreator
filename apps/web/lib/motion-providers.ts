@@ -5,7 +5,16 @@ import { addApiAccount, hasWanProvider, upsertApiProvider } from "./api-provider
 import { resolveRoute, type ViaId } from "./model-routes";
 import { dataRoot, ensureDataDirs } from "./paths";
 
-export type MotionEngineId = "seedance-2-5" | "seedance-2-0" | "kling-2-6" | "kling-3-0" | "dreamactor-v2" | "wan-3-0" | "wan-3-0-std";
+export type MotionEngineId =
+  | "seedance-2-5"
+  | "seedance-2-5-extend"
+  | "kling-3-0-std"
+  | "kling-2-6"
+  | "kling-3-0"
+  | "dreamactor-v2"
+  | "wan-3-0"
+  | "wan-3-0-std"
+  | "grok-imagine-video";
 
 export type MotionProvider = {
   id: string;
@@ -27,18 +36,25 @@ export const MOTION_PRESETS: {
   hint: string;
 }[] = [
   {
-    id: "seedance-2-0",
-    name: "HensunAI · Seedance 2.0",
-    baseURL: "https://hensunai.com",
-    model: "Dreamina-Seedance-2.0",
-    hint: "NewAPI on hensunai.com. Dreamina-Seedance-2.0 I2V.",
+    id: "seedance-2-5",
+    name: "Higgsfield · Seedance 2.5 I2V",
+    baseURL: "https://api.higgsfield.ai",
+    model: "bytedance/seedance-2.5/image-to-video",
+    hint: "Still → 4–30s 720p + audio. Higgsfield key.",
   },
   {
-    id: "seedance-2-5",
-    name: "CometAPI · Seedance 2.5",
-    baseURL: "https://api.cometapi.com",
-    model: "seedance-2-5",
-    hint: "Paid CometAPI. Still → 4–30s 720p I2V. Not motion copy. Key also via COMETAPI_KEY.",
+    id: "seedance-2-5-extend",
+    name: "Higgsfield · Seedance 2.5 Extend",
+    baseURL: "https://api.higgsfield.ai",
+    model: "bytedance/seedance-2.5/video-extend",
+    hint: "Extend an existing clip 4–30s. Needs a source video.",
+  },
+  {
+    id: "kling-3-0-std",
+    name: "Higgsfield · Kling 3.0 Standard I2V",
+    baseURL: "https://api.higgsfield.ai",
+    model: "kling-video/v3.0/std/image-to-video",
+    hint: "Still → 3–15s with audio. Not Motion Control. Not Pro/4K/Turbo.",
   },
   {
     id: "kling-2-6",
@@ -66,14 +82,21 @@ export const MOTION_PRESETS: {
     name: "Alibaba · Wan 3.0 Prime",
     baseURL: "https://dashscope-intl.aliyuncs.com/api/v1",
     model: "wan3.0-video-prime",
-    hint: "Singapore wan3.0-video-prime. Faster. $0.14/s 720p. Same key as Standard.",
+    hint: "Singapore dashscope-intl wan3.0-video-prime. Faster. Same key as Standard.",
   },
   {
     id: "wan-3-0-std",
     name: "Alibaba · Wan 3.0",
     baseURL: "https://dashscope-intl.aliyuncs.com/api/v1",
     model: "wan3.0-video",
-    hint: "Singapore wan3.0-video standard. Cheaper, slower. ~$0.07/s 720p promo.",
+    hint: "Singapore dashscope-intl wan3.0-video standard. Cheaper, slower.",
+  },
+  {
+    id: "grok-imagine-video",
+    name: "xAI · Grok Imagine Video 1.5",
+    baseURL: "https://api.x.ai/v1",
+    model: "grok-imagine-video-1.5",
+    hint: "I2V 3–15s 720p 9:16. Adult-capable. Same XAI_API_KEY as Imagine stills.",
   },
 ];
 
@@ -108,10 +131,18 @@ function isKlingMotion(engineId: string) {
 }
 
 function envKeyFor(engineId: string) {
-  if (engineId === "seedance-2-5") return process.env.COMETAPI_KEY?.trim() || "";
+  if (engineId === "seedance-2-5" || engineId === "seedance-2-5-extend" || engineId === "kling-3-0-std") {
+    const id = (process.env.HIGGSFIELD_API_KEY_ID || "").trim();
+    const secret = (process.env.HIGGSFIELD_API_KEY_SECRET || "").trim();
+    if (id && secret) return `${id}:${secret}`;
+    return process.env.COMETAPI_KEY?.trim() || "";
+  }
   if (isKlingMotion(engineId)) return process.env.KLING_API_KEY?.trim() || "";
   if (engineId === "dreamactor-v2") return (process.env.FAL_KEY || process.env.FAL_API_KEY || "").trim();
   if (engineId === "wan-3-0" || engineId === "wan-3-0-std") return (process.env.DASHSCOPE_WAN_API_KEY || "").trim();
+  if (engineId === "grok-imagine-video") {
+    return (process.env.XAI_VIDEO_API_KEY || process.env.XAI_API_KEY || "").trim();
+  }
   return "";
 }
 
@@ -198,10 +229,11 @@ export function addMotionProvider(input: {
   store.providers = store.providers.filter((p) => p.engineId !== row.engineId);
   store.providers.push(row);
   writeStore(store);
-  if (row.engineId === "seedance-2-5" && (row.baseURL || "").includes("hensunai")) {
-    upsertApiProvider("hensun", row.apiKey, row.baseURL);
-  } else if (row.engineId === "seedance-2-5") upsertApiProvider("comet", row.apiKey, row.baseURL);
-  if (row.engineId === "seedance-2-0") upsertApiProvider("hensun", row.apiKey, row.baseURL);
+  if (row.engineId === "seedance-2-5-extend" || row.engineId === "kling-3-0-std") {
+    upsertApiProvider("higgsfield", row.apiKey, row.baseURL);
+  } else if (row.engineId === "seedance-2-5" && (row.baseURL || "").includes("higgsfield")) {
+    upsertApiProvider("higgsfield", row.apiKey, row.baseURL);
+  }
   if (isKlingMotion(row.engineId)) upsertApiProvider("kling", row.apiKey, row.baseURL);
   if (row.engineId === "dreamactor-v2") upsertApiProvider("fal", row.apiKey, row.baseURL);
   if (row.engineId === "wan-3-0" || row.engineId === "wan-3-0-std") {
@@ -212,6 +244,7 @@ export function addMotionProvider(input: {
       note: "Wan 3.0 video only. Singapore. Separate from Qwen LLM.",
     });
   }
+  if (row.engineId === "grok-imagine-video") upsertApiProvider("xai", row.apiKey, row.baseURL);
   return row.id;
 }
 

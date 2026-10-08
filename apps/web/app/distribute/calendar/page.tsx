@@ -1,24 +1,21 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Btn, inputClass, Page, Pill, Surface } from "@/components/ui";
+import { Btn, inputClass, Page, Pill, Surface, TextLink } from "@/components/ui";
 
-type Account = { id: string; platform: string; accountName: string; connectionState: string; hasToken: boolean };
-type Character = { id: string; name: string; identityUrl?: string | null; edits?: { url: string }[]; slots?: { url: string | null }[] };
+type Account = { id: string; platform: string; accountName: string; handle?: string; connectionState: string; hasToken: boolean };
+type Media = { url: string; label: string };
+type Character = { id: string; name: string; media: Media[] };
 type Post = {
   id: string;
   accountId: string;
   platform: string;
   mediaUrl: string;
-  mediaType: string;
   caption: string;
   scheduledAt?: string;
   createdAt?: string;
   status: string;
   approval: string;
-  mode: string;
-  error?: string;
-  platformPostId?: string;
 };
 
 function startOfWeek(d: Date) {
@@ -29,8 +26,32 @@ function startOfWeek(d: Date) {
   return x;
 }
 
-function ymd(d: Date) {
-  return d.toISOString().slice(0, 10);
+function localDay(d: Date) {
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+function dayKey(raw: string) {
+  if (!raw) return "";
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return raw.slice(0, 10);
+  return localDay(d);
+}
+
+function fileLabel(url: string) {
+  const clean = url.split("?")[0] || url;
+  const name = clean.split("/").pop() || url;
+  return name.length > 42 ? `${name.slice(0, 18)}…${name.slice(-16)}` : name;
+}
+
+function suggestMode(selected: Account[], video: boolean) {
+  if (!selected.length) return "export";
+  if (selected.some((a) => a.platform === "tiktok")) return "inbox";
+  if (selected.some((a) => a.platform === "youtube") && !video) return "export";
+  if (selected.some((a) => a.platform === "pinterest") && video) return "export";
+  if (selected.every((a) => a.hasToken && a.platform !== "instagram" && a.platform !== "threads")) return "direct";
+  return "export";
 }
 
 export default function CalendarPage() {
@@ -41,6 +62,7 @@ export default function CalendarPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [accountIds, setAccountIds] = useState<string[]>([]);
+  const [pickedDefault, setPickedDefault] = useState(false);
   const [characterId, setCharacterId] = useState("");
   const [mediaUrl, setMediaUrl] = useState("");
   const [caption, setCaption] = useState("");
@@ -51,6 +73,9 @@ export default function CalendarPage() {
   const [scheduledAt, setScheduledAt] = useState("");
   const [mode, setMode] = useState("direct");
   const [approve, setApprove] = useState(false);
+  const [boards, setBoards] = useState<{ id: string; name: string }[]>([]);
+  const [boardId, setBoardId] = useState("");
+  const [boardsNote, setBoardsNote] = useState("");
 
   async function load() {
     const res = await fetch("/api/distribute/posts");
@@ -58,17 +83,21 @@ export default function CalendarPage() {
     setPosts(json.posts || []);
     setAccounts(json.accounts || []);
     setCharacters(json.characters || []);
-    if (!accountIds.length && json.accounts?.[0]) setAccountIds([json.accounts[0].id]);
+    return (json.accounts || []) as Account[];
   }
 
   useEffect(() => {
-    void load();
+    void load().then((rows) => {
+      if (pickedDefault) return;
+      const connected = rows.filter((a) => a.hasToken).map((a) => a.id);
+      setAccountIds(connected.length ? connected : rows[0] ? [rows[0].id] : []);
+      setPickedDefault(true);
+    });
     const t = setInterval(() => {
       void fetch("/api/distribute/tick", { method: "POST" }).then(() => load());
     }, 30000);
     return () => clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [pickedDefault]);
 
   const days = useMemo(() => {
     return Array.from({ length: 7 }, (_, i) => {
@@ -78,15 +107,49 @@ export default function CalendarPage() {
     });
   }, [week]);
 
-  const mediaOptions = useMemo(() => {
-    const c = characters.find((x) => x.id === characterId);
-    if (!c) return [];
-    const urls: string[] = [];
-    if (c.identityUrl) urls.push(c.identityUrl);
-    for (const s of c.slots || []) if (s.url) urls.push(s.url);
-    for (const e of c.edits || []) if (e.url) urls.push(e.url);
-    return urls;
-  }, [characters, characterId]);
+  const mediaOptions = useMemo(() => characters.find((c) => c.id === characterId)?.media || [], [characters, characterId]);
+  const selected = accounts.filter((a) => accountIds.includes(a.id));
+  const video = /\.mp4($|\?)/i.test(mediaUrl);
+  const wantsYoutube = selected.some((a) => a.platform === "youtube");
+  const pinLogins = selected.filter((a) => a.platform === "pinterest" && a.hasToken);
+  const pinLogin = pinLogins.length === 1 ? pinLogins[0] : undefined;
+  const wantBoard = Boolean(pinLogin) && mode === "direct" && !video;
+  const today = localDay(new Date());
+  const pickedDay = scheduledAt.slice(0, 10);
+  const range = `${days[0].toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${days[6].toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+
+  function applyAccounts(next: string[]) {
+    setAccountIds(next);
+    const rows = accounts.filter((a) => next.includes(a.id));
+    setMode(suggestMode(rows, video));
+  }
+
+  useEffect(() => {
+    if (!wantBoard || !pinLogin) {
+      setBoards([]);
+      setBoardId("");
+      setBoardsNote("");
+      return;
+    }
+    let stop = false;
+    setBoardsNote("");
+    void fetch(`/api/distribute/boards?accountId=${encodeURIComponent(pinLogin.id)}`)
+      .then((r) => r.json())
+      .then((json) => {
+        if (stop) return;
+        const rows = ((json.boards || []) as { id: string; name: string }[]).filter((b) => b.id && b.name);
+        setBoards(rows);
+        setBoardId((cur) => (rows.some((b) => b.id === cur) ? cur : rows[0]?.id || ""));
+        if (json.error) setBoardsNote(json.error);
+        else if (!rows.length) setBoardsNote("This login has no board yet.");
+      })
+      .catch(() => {
+        if (!stop) setBoardsNote("Could not load boards.");
+      });
+    return () => {
+      stop = true;
+    };
+  }, [wantBoard, pinLogin?.id]);
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
@@ -102,11 +165,12 @@ export default function CalendarPage() {
           mediaUrl,
           caption,
           title,
-          tags,
-          privacy,
-          madeForKids: kids,
+          tags: wantsYoutube ? tags : undefined,
+          privacy: wantsYoutube ? privacy : undefined,
+          madeForKids: wantsYoutube ? kids : false,
           scheduledAt: scheduledAt || undefined,
           mode,
+          boardId: wantBoard ? boardId : undefined,
           approval: approve ? "approved" : "pending",
           containsSyntheticMedia: true,
         }),
@@ -125,11 +189,12 @@ export default function CalendarPage() {
 
   return (
     <Page
-      kicker="DISTRIBUTE · LIVE"
+      kicker="DISTRIBUTE"
       title="Calendar"
-      description="One media → many tester accounts. Approve before public. Tick while this page is open (30s), or Publish Queue. No Autopilot. No Stripe credits."
+      description="One still or video, one or more logins. Approve before it can publish. Due posts run while this page is open."
       actions={
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="px-1 text-[13px] font-semibold text-[#4B5563]">{range}</span>
           <Btn
             variant="ghost"
             type="button"
@@ -139,7 +204,7 @@ export default function CalendarPage() {
               setWeek(startOfWeek(n));
             }}
           >
-            ← Week
+            Previous
           </Btn>
           <Btn variant="ghost" type="button" onClick={() => setWeek(startOfWeek(new Date()))}>
             Today
@@ -153,40 +218,41 @@ export default function CalendarPage() {
               setWeek(startOfWeek(n));
             }}
           >
-            Week →
+            Next
           </Btn>
         </div>
       }
     >
       {error ? <p className="mb-4 text-sm text-[#B91C1C]">{error}</p> : null}
 
-      <div className="mb-6 grid gap-2 md:grid-cols-7">
+      <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
         {days.map((d) => {
-          const key = ymd(d);
-          const items = posts.filter((p) => {
-            const raw = p.scheduledAt || p.createdAt || "";
-            const local = raw ? ymd(new Date(raw)) : "";
-            return local === key;
-          });
+          const key = localDay(d);
+          const items = posts.filter((p) => dayKey(p.scheduledAt || p.createdAt || "") === key);
+          const isToday = key === today;
+          const isPick = key === pickedDay;
           return (
-            <Surface key={key} className="min-h-[9rem] p-3">
-              <button
-                type="button"
-                className="text-left text-[12px] font-semibold"
-                onClick={() => setScheduledAt(`${key}T10:00`)}
-              >
-                {d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+            <Surface key={key} className={`min-h-[8.5rem] p-3 ${isPick ? "ring-2 ring-[#652DFF]" : ""} ${isToday ? "bg-[#F6F3FF]" : ""}`}>
+              <button type="button" className="text-left text-[12px] font-semibold" onClick={() => setScheduledAt(`${key}T10:00`)}>
+                {d.toLocaleDateString(undefined, { weekday: "short", day: "numeric" })}
+                {isToday ? <span className="ml-1 font-normal text-[#652DFF]">today</span> : null}
               </button>
-              <div className="mt-2 space-y-1">
-                {items.map((p) => (
-                  <a key={p.id} href="/distribute/queue" className="block truncate text-[11px] text-[#4B5563]">
-                    <Pill tone={p.status === "published" ? "ready" : p.status === "failed" ? "off" : p.approval === "approved" ? "on" : "muted"}>
-                      {p.platform}
-                    </Pill>{" "}
-                    {p.scheduledAt ? new Date(p.scheduledAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + " · " : ""}
-                    {p.caption || p.status}
-                  </a>
-                ))}
+              <div className="mt-2 space-y-1.5">
+                {items.map((p) => {
+                  const account = accounts.find((a) => a.id === p.accountId);
+                  return (
+                    <a key={p.id} href={`/distribute/queue?post=${p.id}`} className="block rounded-lg bg-white/80 px-1.5 py-1 text-[11px] text-[#374151]">
+                      <Pill tone={p.status === "published" || p.status === "exported" ? "ready" : p.status === "failed" ? "off" : p.approval === "approved" ? "on" : "muted"}>
+                        {p.platform}
+                      </Pill>
+                      <span className="mt-0.5 block truncate">
+                        {p.scheduledAt ? new Date(p.scheduledAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + " · " : ""}
+                        {account?.handle ? `@${account.handle} · ` : ""}
+                        {p.caption || p.status}
+                      </span>
+                    </a>
+                  );
+                })}
               </div>
             </Surface>
           );
@@ -194,31 +260,45 @@ export default function CalendarPage() {
       </div>
 
       <Surface>
-        <p className="text-sm font-semibold">Schedule a post</p>
-        <p className="mt-1 text-[13px] text-[#6B7280]">Same still/video can go to several testers at once. Each gets its own queue row.</p>
-        <form onSubmit={create} className="mt-3 grid gap-3 md:grid-cols-2">
+        <p className="text-sm font-semibold">Schedule</p>
+        <p className="mt-1 text-[13px] text-[#6B7280]">
+          Connected logins publish. Others get an export pack. <TextLink href="/distribute/accounts">Accounts</TextLink>
+        </p>
+        <form onSubmit={create} className="mt-4 grid gap-3 md:grid-cols-2">
           <fieldset className="md:col-span-2">
-            <legend className="text-[11px] font-semibold tracking-[0.16em] text-[#6B7280]">Tester accounts</legend>
-            <div className="mt-2 flex flex-wrap gap-3">
-              {accounts.map((a) => (
-                <label key={a.id} className="flex items-center gap-2 text-[13px]">
-                  <input
-                    type="checkbox"
-                    checked={accountIds.includes(a.id)}
-                    onChange={() =>
-                      setAccountIds((cur) => (cur.includes(a.id) ? cur.filter((x) => x !== a.id) : [...cur, a.id]))
-                    }
-                  />
-                  {a.accountName} · {a.platform}
-                  {a.hasToken ? "" : " · export"}
-                </label>
-              ))}
-              {accounts.length === 0 ? <p className="text-[13px] text-[#9CA3AF]">Add testers in Accounts first.</p> : null}
+            <legend className="text-[11px] font-semibold tracking-[0.16em] text-[#6B7280]">Logins</legend>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {accounts.map((a) => {
+                const on = accountIds.includes(a.id);
+                return (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => applyAccounts(on ? accountIds.filter((id) => id !== a.id) : [...accountIds, a.id])}
+                    className={`rounded-full border px-3 py-1.5 text-[13px] font-semibold ${on ? "border-[#652DFF] bg-[#F6F3FF] text-[#3B1D9A]" : "border-[#E6E8EE] text-[#4B5563]"}`}
+                  >
+                    {a.handle ? `@${a.handle}` : a.accountName} · {a.platform}
+                    {a.hasToken ? "" : " · export"}
+                  </button>
+                );
+              })}
+              {accounts.length === 0 ? (
+                <p className="text-[13px] text-[#9CA3AF]">
+                  Add a login in <TextLink href="/distribute/accounts">Accounts</TextLink> first.
+                </p>
+              ) : null}
             </div>
           </fieldset>
           <label className="text-[11px] font-semibold tracking-[0.16em] text-[#6B7280]">
             Character
-            <select className={inputClass} value={characterId} onChange={(e) => setCharacterId(e.target.value)}>
+            <select
+              className={inputClass}
+              value={characterId}
+              onChange={(e) => {
+                setCharacterId(e.target.value);
+                setMediaUrl("");
+              }}
+            >
               <option value="">None</option>
               {characters.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -227,70 +307,113 @@ export default function CalendarPage() {
               ))}
             </select>
           </label>
-          <label className="text-[11px] font-semibold tracking-[0.16em] text-[#6B7280] md:col-span-2">
-            Media
-            <select className={inputClass} value={mediaUrl} onChange={(e) => setMediaUrl(e.target.value)}>
-              <option value="">Paste or pick…</option>
-              {mediaOptions.map((u) => (
-                <option key={u} value={u}>
-                  {u}
-                </option>
-              ))}
-            </select>
-            <input className={inputClass} placeholder="/api/media/…" value={mediaUrl} onChange={(e) => setMediaUrl(e.target.value)} required />
-            {mediaUrl ? (
-              <div className="mt-2 max-h-40 overflow-hidden rounded-lg border border-[#E6E8EE]">
-                {/\.mp4($|\?)/i.test(mediaUrl) ? (
-                  <video src={mediaUrl} className="max-h-40 w-full object-contain" muted />
-                ) : (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={mediaUrl} alt="" className="max-h-40 w-full object-contain" />
-                )}
-              </div>
-            ) : null}
-          </label>
-          <label className="text-[11px] font-semibold tracking-[0.16em] text-[#6B7280]">
-            Title (YouTube)
-            <input className={inputClass} value={title} onChange={(e) => setTitle(e.target.value)} />
-          </label>
           <label className="text-[11px] font-semibold tracking-[0.16em] text-[#6B7280]">
             When
             <input className={inputClass} type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />
           </label>
-          <label className="text-[11px] font-semibold tracking-[0.16em] text-[#6B7280]">
-            Privacy (YouTube)
-            <select className={inputClass} value={privacy} onChange={(e) => setPrivacy(e.target.value)}>
-              <option value="private">Private</option>
-              <option value="unlisted">Unlisted</option>
-              <option value="public">Public (needs Approve)</option>
+          <label className="text-[11px] font-semibold tracking-[0.16em] text-[#6B7280] md:col-span-2">
+            Media
+            <select
+              className={inputClass}
+              value={mediaOptions.some((m) => m.url === mediaUrl) ? mediaUrl : ""}
+              onChange={(e) => {
+                const url = e.target.value;
+                setMediaUrl(url);
+                setMode(suggestMode(selected, /\.mp4($|\?)/i.test(url)));
+              }}
+            >
+              <option value="">{characterId ? "Pick from this character…" : "Pick a character, or paste a path"}</option>
+              {mediaOptions.map((m) => (
+                <option key={m.url} value={m.url}>
+                  {m.label} · {fileLabel(m.url)}
+                </option>
+              ))}
             </select>
-          </label>
-          <label className="text-[11px] font-semibold tracking-[0.16em] text-[#6B7280]">
-            Tags (YouTube)
-            <input className={inputClass} placeholder="comma separated" value={tags} onChange={(e) => setTags(e.target.value)} />
+            <input
+              className={inputClass}
+              placeholder="/api/media/…"
+              value={mediaUrl}
+              onChange={(e) => {
+                setMediaUrl(e.target.value);
+                setMode(suggestMode(selected, /\.mp4($|\?)/i.test(e.target.value)));
+              }}
+              required
+            />
+            {mediaUrl ? (
+              <div className="mt-2 h-28 w-28 overflow-hidden rounded-xl border border-[#E6E8EE] bg-[#F8F8FB]">
+                {video ? (
+                  <video src={mediaUrl} className="h-full w-full object-cover" muted />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={mediaUrl} alt="" className="h-full w-full object-cover" />
+                )}
+              </div>
+            ) : null}
           </label>
           <label className="text-[11px] font-semibold tracking-[0.16em] text-[#6B7280] md:col-span-2">
             Caption
-            <textarea className={inputClass} rows={4} value={caption} onChange={(e) => setCaption(e.target.value)} />
+            <textarea className={inputClass} rows={3} value={caption} onChange={(e) => setCaption(e.target.value)} />
           </label>
+          {wantsYoutube || selected.some((a) => a.platform === "pinterest") ? (
+            <label className="text-[11px] font-semibold tracking-[0.16em] text-[#6B7280]">
+              Title
+              <input className={inputClass} value={title} onChange={(e) => setTitle(e.target.value)} />
+            </label>
+          ) : null}
+          {wantsYoutube ? (
+            <>
+              <label className="text-[11px] font-semibold tracking-[0.16em] text-[#6B7280]">
+                Privacy
+                <select className={inputClass} value={privacy} onChange={(e) => setPrivacy(e.target.value)}>
+                  <option value="private">Private</option>
+                  <option value="unlisted">Unlisted</option>
+                  <option value="public">Public</option>
+                </select>
+              </label>
+              <label className="text-[11px] font-semibold tracking-[0.16em] text-[#6B7280]">
+                Tags
+                <input className={inputClass} placeholder="comma separated" value={tags} onChange={(e) => setTags(e.target.value)} />
+              </label>
+              <label className="flex items-center gap-2 text-[13px] font-semibold">
+                <input type="checkbox" checked={kids} onChange={(e) => setKids(e.target.checked)} />
+                Made for kids
+              </label>
+            </>
+          ) : null}
           <label className="text-[11px] font-semibold tracking-[0.16em] text-[#6B7280]">
             Mode
             <select className={inputClass} value={mode} onChange={(e) => setMode(e.target.value)}>
-              <option value="direct">Direct (YouTube when connected)</option>
-              <option value="inbox">Inbox (TikTok MVP)</option>
+              <option value="direct">Direct</option>
+              <option value="inbox">Inbox</option>
               <option value="export">Export pack</option>
             </select>
           </label>
           <label className="flex items-center gap-2 text-[13px] font-semibold">
             <input type="checkbox" checked={approve} onChange={(e) => setApprove(e.target.checked)} />
-            Approve now (required before public publish)
+            Approve now
           </label>
-          <label className="flex items-center gap-2 text-[13px] font-semibold">
-            <input type="checkbox" checked={kids} onChange={(e) => setKids(e.target.checked)} />
-            Made for kids (YouTube)
-          </label>
+          {video && selected.some((a) => a.platform === "pinterest") ? (
+            <p className="text-[12px] text-[#6B7280] md:col-span-2">Pinterest direct is a still. A video on that login uses Export.</p>
+          ) : null}
+          {wantBoard ? (
+            <label className="text-[11px] font-semibold tracking-[0.16em] text-[#6B7280]">
+              Board
+              <select className={inputClass} value={boardId} onChange={(e) => setBoardId(e.target.value)}>
+                {boards.length === 0 ? <option value="">No board yet</option> : null}
+                {boards.map((board) => (
+                  <option key={board.id} value={board.id}>
+                    {board.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          {pinLogins.length > 1 && mode === "direct" && !video ? (
+            <p className="text-[12px] text-[#6B7280] md:col-span-2">Each Pinterest login needs its own board. Schedule one login at a time.</p>
+          ) : null}
+          {boardsNote ? <p className="text-[12px] text-[#B91C1C] md:col-span-2">{boardsNote}</p> : null}
           <div className="md:col-span-2">
-            <Btn type="submit" disabled={busy === "create" || accountIds.length === 0}>
+            <Btn type="submit" disabled={busy === "create" || accountIds.length === 0 || (wantBoard && !boardId)}>
               {busy === "create" ? "Saving…" : "Add to calendar"}
             </Btn>
           </div>

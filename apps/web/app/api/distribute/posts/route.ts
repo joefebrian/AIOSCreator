@@ -4,6 +4,7 @@ import { createPublication, listPublications } from "@/lib/publications";
 import { getSocialAccount, listSocialAccounts, publicAccount } from "@/lib/social-accounts";
 import type { PublishMode, SocialPlatform } from "@/lib/social-accounts";
 import type { Approval, Privacy } from "@/lib/publications";
+import { resolvePinterestBoard } from "@/lib/social-publish";
 
 export const runtime = "nodejs";
 
@@ -11,13 +12,20 @@ export async function GET() {
   return NextResponse.json({
     posts: listPublications(),
     accounts: listSocialAccounts().map(publicAccount),
-    characters: listCharacters().map((c) => ({
-      id: c.id,
-      name: c.name,
-      identityUrl: c.identityUrl,
-      slots: c.slots?.map((s) => ({ url: s.url })),
-      edits: c.edits?.map((e) => ({ url: e.url })),
-    })),
+    characters: listCharacters().map((c) => {
+      const media: { url: string; label: string }[] = [];
+      const push = (url: string | null | undefined, label: string) => {
+        if (!url || media.some((item) => item.url === url)) return;
+        media.push({ url, label });
+      };
+      push(c.identityUrl, "Headshot");
+      for (const slot of c.slots || []) push(slot.url, slot.label || slot.key);
+      for (const edit of (c.edits || []).slice(0, 8)) {
+        const when = edit.createdAt ? new Date(edit.createdAt).toLocaleString() : "";
+        push(edit.url, when ? `Edit · ${when}` : "Edit");
+      }
+      return { id: c.id, name: c.name, media };
+    }),
   });
 }
 
@@ -39,6 +47,7 @@ export async function POST(req: Request) {
     containsSyntheticMedia?: boolean;
     approval?: Approval;
     scheduledAt?: string;
+    boardId?: string;
   };
   const ids = [...new Set([...(body.accountIds || []), body.accountId].filter(Boolean) as string[])];
   if (!ids.length) return NextResponse.json({ error: "pick an account" }, { status: 400 });
@@ -59,6 +68,18 @@ export async function POST(req: Request) {
           : account.accessToken
             ? "direct"
             : "export");
+    let boardId: string | undefined;
+    let boardName: string | undefined;
+    if (account.platform === "pinterest" && mode === "direct" && mediaType === "image") {
+      try {
+        const board = await resolvePinterestBoard(account, body.boardId);
+        boardId = board.id;
+        boardName = board.name;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Pick a Pinterest board";
+        return NextResponse.json({ error: message }, { status: 400 });
+      }
+    }
     rows.push(
       createPublication({
         accountId: account.id,
@@ -71,6 +92,8 @@ export async function POST(req: Request) {
         tags: body.tags,
         categoryId: body.categoryId,
         disclosure: body.disclosure,
+        boardId,
+        boardName,
         mode,
         privacy: body.privacy || (account.platform === "youtube" ? "private" : "public"),
         madeForKids: Boolean(body.madeForKids),

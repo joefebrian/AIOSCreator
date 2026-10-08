@@ -1,0 +1,35 @@
+Rebuild UGC Factory inside the existing AIOSCreator repository using the supplied development package.
+
+Builder profile: Grok Build 0.2.112, Grok 4.7, reasoning effort xhigh. Verify the actual available session/configuration; do not assume undocumented flags, change global settings, or upgrade automatically.
+
+Read applicable AGENTS.md and these files in the handoff folder:
+00_START_HERE.md
+01_DEVELOPMENT_PLAN.md
+02_TECHNICAL_CONTRACTS.md
+04_ACCEPTANCE_AND_BENCHMARK.md
+05_CREATIVE_PLAYBOOKS_AND_SHOT_EXAMPLES.md
+06_RECIPE_REGISTRY.seed.json
+references/AIOSCreator_UGC_Yapping_Bible_v1.0.md
+references/AIOSCreator_Yapping_Astra_Implementation_Guide.md
+
+Objective: complete realistic creator-style affiliate UGC videos matching Joe's supplied video benchmark. Focus on HomeGadget kitchen/cleaning and preschool toys unbox/play/build for ages 3–6, with adults as commercial viewers. Markets: Indonesia, Malaysia, Singapore, Thailand, United States.
+
+Product invariants:
+1. ProductFamily -> exact physical CanonicalSku -> local marketplace listings. Verify equivalence; different package contents/accessories/physical variants are separate SKUs.
+2. One production = one complete final video for one SKU/listing/market/locale/placement. No implicit five-market or all-template batch.
+3. Five pilot recipes initially. Preserve the legacy 33 templates/history and unrelated Fashion/Character modules.
+4. Persistent My Productions board + contextual drawer, saved approvals, and per-item recovery.
+5. Jev 1.13 chooses typed feasible next-creative options; confidence is not virality/conversion probability. Astra writes/directs; Seedance 2.5 and WAN 3.0/Prime execute through verified adapters.
+6. Product truth, useful actions, exact object states, stable creator/voice, audio ownership, and actual edit timing must connect from brief through final export.
+7. Reference performance is unknown. Preserve raw corpus approval flags and source attribution. Never invent product facts, offers, testimonials, child reactions, or personal history.
+8. Manual/CSV performance import only for this release. No auto-post, ads automation/API metrics, payout, or seller checkout.
+
+Start M0: inspect actual routes, catalog/assets/characters, model clients, persistence/jobs, media tools, auth/workspaces, tests, existing user changes, and benchmark media. Map the plan to the repository. Reuse suitable host services and design system; avoid an independent replacement app.
+
+Create REPOSITORY_DISCOVERY.md, DECISIONS.md, IMPLEMENTATION_LOG.md, and an acceptance report under the project handoff directory. Record exact paths, model/account mappings, checks, and blockers without exposing secrets.
+
+Then implement M1–M7 in order with durable state, schema checks, revision/idempotency guards, cost caps, cancellation reconciliation, real media assembly, and stage-specific recovery. Continue authorized reversible work without asking approval for routine choices. Missing credentials block only dependent live actions.
+
+Use deterministic fixtures first and label them. Paid generation uses explicit app actions and an approved bounded budget; do not start unbounded live tests or deploy/publish automatically.
+
+After each milestone log changed files, actual checks, evidence, blockers, and next action. Resume from the log after interruption. Never declare completion from UI screenshots, fixtures, or provider success metadata: software, live integration, real benchmark quality, and measured commercial outcomes are separate gates.

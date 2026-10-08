@@ -17,6 +17,8 @@ export type Publication = {
   mediaType: "image" | "video";
   caption: string;
   title?: string;
+  boardId?: string;
+  boardName?: string;
   tags?: string;
   categoryId?: string;
   disclosure?: string;

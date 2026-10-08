@@ -8,6 +8,7 @@ __pycache__/
 data/db/
 data/media/
 data/tmp*
+data/train/
 .env
 .env.*
 !.env.example
